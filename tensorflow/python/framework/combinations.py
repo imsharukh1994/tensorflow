@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""This module customizes `test_combinations` for Tensorflow.
+"""This module customizes `test_combinations` for TensorFlow.
 
-Additionally it provides `generate()`, `combine()` and `times()` with Tensorflow
+Additionally, it provides `generate()`, `combine()`, and `times()` with TensorFlow
 customizations as a default.
 """
 
@@ -73,6 +73,7 @@ class TFVersionCombination(test_combinations.TestCombination):
     return [test_combinations.OptionalParameter("tf_api_version")]
 
 
+# Modify the generate function to include the custom combinations
 generate = functools.partial(
     test_combinations.generate,
     test_combinations=(EagerGraphCombination(), TFVersionCombination()))
@@ -80,4 +81,5 @@ combine = test_combinations.combine
 times = test_combinations.times
 NamedObject = test_combinations.NamedObject
 
+# Export the modified generate function
 tf_export("__internal__.test.combinations.generate", v1=[])(generate)
