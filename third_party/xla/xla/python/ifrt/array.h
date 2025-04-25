@@ -22,6 +22,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/base/macros.h"
 #include "absl/base/nullability.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
@@ -76,18 +77,23 @@ class Array : public llvm::RTTIExtends<Array, Value> {
   // The device memory layout for each shard of the Array. All shards are
   // assumed to have the same layout. Cannot be nullptr; implementations should
   // return UNIMPLEMENTED instead.
-  virtual absl::StatusOr<std::unique_ptr<PjRtLayout>> layout() const = 0;
+  virtual absl::StatusOr<std::shared_ptr<const PjRtLayout>> layout() const = 0;
 
   // Breaks an array up into per-device arrays. This is the elimination
   // counterpart of `Client::AssembleArrayFromSingleDeviceArrays()`.
-  // TODO(hyeontaek): Replace this API with the version that takes
-  // `SingleDeviceShardSemantics`.
-  virtual absl::StatusOr<std::vector<tsl::RCReference<Array>>>
-  DisassembleIntoSingleDeviceArrays(ArrayCopySemantics semantics) = 0;
   virtual absl::StatusOr<std::vector<tsl::RCReference<Array>>>
   DisassembleIntoSingleDeviceArrays(
       ArrayCopySemantics array_copy_semantics,
       SingleDeviceShardSemantics single_device_shard_semantics) = 0;
+
+  // TODO(hyeontaek): Replace this API with the version that takes
+  // `SingleDeviceShardSemantics`.
+  ABSL_DEPRECATE_AND_INLINE()
+  absl::StatusOr<std::vector<tsl::RCReference<Array>>>
+  DisassembleIntoSingleDeviceArrays(ArrayCopySemantics semantics) {
+    return DisassembleIntoSingleDeviceArrays(
+        semantics, SingleDeviceShardSemantics::kAddressableShards);
+  }
 
   // Returns a shard of an Array which is fully replicated. This is an
   // optimization so that instead of disassembling into all the shards when

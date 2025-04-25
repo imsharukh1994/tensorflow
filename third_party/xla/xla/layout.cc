@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "xla/layout.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <ostream>
@@ -29,22 +30,17 @@ limitations under the License.
 #include "xla/primitive_util.h"
 #include "xla/printer.h"
 #include "xla/shape.h"
+#include "xla/tsl/platform/logging.h"  // IWYU pragma: keep
 #include "xla/xla_data.pb.h"
-#include "tsl/platform/logging.h"  // IWYU pragma: keep
 
 namespace xla {
 
 TileProto Tile::ToProto() const {
   TileProto tile_proto;
-  SetProto(tile_proto);
-  return tile_proto;
-}
-
-void Tile::SetProto(TileProto& tile_proto) const {
-  tile_proto.Clear();
   for (int64_t i : dimensions()) {
     tile_proto.add_dimensions(i);
   }
+  return tile_proto;
 }
 
 void Tile::Print(Printer* printer) const {
@@ -218,12 +214,13 @@ Layout& Layout::operator=(Layout&& other) = default;
   for (const TileProto& tile_proto : proto.tiles()) {
     *layout.add_tiles() = Tile::CreateFromProto(tile_proto);
   }
-  if (proto.tail_padding_alignment_in_elements() != 0) {
-    layout.set_tail_padding_alignment_in_elements(
-        proto.tail_padding_alignment_in_elements());
-  } else {
-    layout.set_tail_padding_alignment_in_elements(1);
-  }
+  // If the proto does not have tail_padding_alignment_in_elements set, or have
+  // it set to 0, we treat it as 1.
+  const auto alignment = proto.tail_padding_alignment_in_elements() != 0
+                             ? proto.tail_padding_alignment_in_elements()
+                             : 1;
+  layout.set_tail_padding_alignment_in_elements(alignment,
+                                                ActionOnError::kWarning);
   layout.set_index_primitive_type(proto.index_primitive_type());
   layout.set_pointer_primitive_type(proto.pointer_primitive_type());
   layout.set_element_size_in_bits(proto.element_size_in_bits());
@@ -261,7 +258,7 @@ void Layout::SetProto(LayoutProto& proto) const {
     proto.add_minor_to_major(dimension);
   }
   for (const Tile& tile : tiles()) {
-    tile.SetProto(*proto.add_tiles());
+    *proto.add_tiles() = tile.ToProto();
   }
   proto.set_tail_padding_alignment_in_elements(
       tail_padding_alignment_in_elements());
@@ -505,8 +502,10 @@ Shape* Layout::mutable_physical_shape() {
 
 void Layout::clear_physical_shape() { physical_shape_ = nullptr; }
 
-Layout& Layout::DeleteDimension(int64_t dim_to_delete) {
-  for (int64_t i = 0; i < minor_to_major_.size();) {
+Layout& Layout::DeleteDimension(int dim_to_delete) {
+  CHECK_GE(dim_to_delete, 0);
+  CHECK_LT(dim_to_delete, minor_to_major_.size());
+  for (int i = 0; i < minor_to_major_.size();) {
     if (minor_to_major_[i] == dim_to_delete) {
       minor_to_major_.erase(minor_to_major_.begin() + i);
       continue;
@@ -517,10 +516,16 @@ Layout& Layout::DeleteDimension(int64_t dim_to_delete) {
     ++i;
   }
   // Delete the corresponding dim level types.
-  if (LayoutUtil::IsSparse(*this)) {
-    if (dim_to_delete < n_dim_level_types_) n_dim_level_types_--;
-    if (dim_to_delete < n_dim_unique_) n_dim_unique_--;
-    if (dim_to_delete < n_dim_ordered_) n_dim_ordered_--;
+  if (dim_to_delete < n_dim_level_types_) {
+    n_dim_level_types_--;
+  }
+  if (dim_to_delete < n_dim_unique_) {
+    n_dim_unique_--;
+  }
+  if (dim_to_delete < n_dim_ordered_) {
+    n_dim_ordered_--;
+  }
+  if (dim_to_delete < dim_attributes_.size()) {
     dim_attributes_.erase(dim_attributes_.begin() + dim_to_delete);
   }
   return *this;

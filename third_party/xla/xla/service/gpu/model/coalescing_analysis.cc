@@ -32,13 +32,13 @@ limitations under the License.
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Support/LLVM.h"
+#include "xla/backends/gpu/codegen/fusion_emitter.h"
 #include "xla/hlo/analysis/indexing_analysis.h"
 #include "xla/hlo/analysis/indexing_map.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/utils/hlo_traversal.h"
 #include "xla/layout.h"
-#include "xla/service/gpu/fusions/fusion_emitter.h"
 #include "xla/service/gpu/gpu_fusible.h"
 #include "xla/service/gpu/hlo_fusion_analysis.h"
 #include "xla/service/gpu/model/affine_map_evaluator.h"
@@ -221,12 +221,12 @@ bool EstimateCoalescingViaMemoryTransactionsCount(
 
 // Returns a linearized shape, i.e. tensor<num_elements(input) x element_type>.
 Shape GetLinearizedShape(const Shape& shape) {
-  if (shape.rank() == 0) {
+  if (shape.dimensions().size() == 0) {
     return shape;
   }
   std::vector<int64_t> dims{ShapeUtil::ElementsIn(shape)};
   auto result = Shape(shape.element_type(), dims,
-                      absl::InlinedVector<bool, 4>(dims.size(), false), {});
+                      absl::InlinedVector<bool, 4>(dims.size(), false));
   *result.mutable_layout() = xla::Layout({0});
   return result;
 }
@@ -243,7 +243,7 @@ std::optional<GroupedByOpIndexingMap> GetThreadIdToInputMemoryLayoutsMaps(
        llvm::enumerate(fusion_analysis.fusion_heroes())) {
     for (const auto& [hero_operand_index, hero_operand] :
          llvm::enumerate(hero.GetOperands())) {
-      if (hero_operand.shape().rank() == 0) {
+      if (hero_operand.shape().dimensions().size() == 0) {
         continue;
       }
       // Compute thread ID -> hero operand indexing map.
@@ -548,7 +548,7 @@ std::vector<Interval> FindContiguousIntervals(
   }
   // Case 2: f(thread_x) != thread_x * multiplier.
   auto intervals = FindIntervals(partitioned_expr.func_of_d0,
-                                 {indexing_map.GetDimVars(0).bounds});
+                                 {indexing_map.GetDimVar(0).bounds});
   // Case 2.1: g(s) != s.
   if (partitioned_expr.func_of_s0 != range) {
     return intervals;
@@ -666,7 +666,7 @@ bool CoalescingAnalysis::ComputeCoalescingForAllOperands(
     return false;
   }
   for (const HloInstruction* operand : operands) {
-    if (operand->shape().rank() == 0) {
+    if (operand->shape().dimensions().size() == 0) {
       coalescing_per_operand_.insert({operand, true});
       continue;
     }

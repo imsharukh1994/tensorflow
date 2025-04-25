@@ -27,6 +27,7 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -285,7 +286,7 @@ class ConvertNdConvOp : public OpConversionPattern<mhlo::ConvolutionOp> {
       int64_t output_size;
       int64_t pad_low_int64;
       int64_t pad_high_int64;
-      tensorflow::Status status = tensorflow::GetWindowedOutputSizeVerbose(
+      absl::Status status = tensorflow::GetWindowedOutputSizeVerbose(
           mlir::cast<ShapedType>(conv_op.getLhs().getType())
               .getDimSize(input_spatial_dim[i]),
           mlir::cast<ShapedType>(conv_op.getRhs().getType())
@@ -2809,7 +2810,7 @@ class ConvertGatherOp : public OpConversionPattern<mhlo::GatherOp> {
     }
     for (int i = 0; i < slice_sizes_vector.size(); ++i) {
       int s = slice_sizes_vector[i];
-      if (llvm::count(start_indices_batching_dims, i)) {
+      if (llvm::count(operand_batching_dims, i)) {
         if (s != 1) {
           return rewriter.notifyMatchFailure(gather_op,
                                              "unsupported slice sizes");

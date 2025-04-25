@@ -19,6 +19,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
@@ -47,7 +48,7 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tensorflow/utils/xla_call_module_attrs.h"
 #include "tensorflow/compiler/tf2xla/kernels/xla_call_module_loader.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"  // IWYU pragma: keep
-#include "tsl/platform/statusor.h"
+#include "xla/tsl/platform/statusor.h"
 
 namespace mlir {
 namespace TF {

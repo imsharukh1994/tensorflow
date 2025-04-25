@@ -28,8 +28,8 @@ cc_library(
         "//xla/tsl/platform:env.cc",
         "//xla/tsl/platform:file_system.cc",
         "//xla/tsl/platform:file_system_helper.cc",
+        "//xla/tsl/platform:ram_file_system.h",
         "//xla/tsl/platform:threadpool.cc",
-        "@local_tsl//tsl/platform:ram_file_system.h",
     ],
     hdrs = [
         "//xla/tsl/platform:env.h",
@@ -45,37 +45,36 @@ cc_library(
     deps = [
         ":error_windows",
         ":wide_char",
+        "//xla/tsl/platform:env_time",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:file_statistics",
+        "//xla/tsl/platform:logging",
+        "//xla/tsl/platform:macros",
+        "//xla/tsl/platform:status",
+        "//xla/tsl/platform:statusor",
+        "//xla/tsl/platform:threadpool_interface",
+        "//xla/tsl/platform:types",
         "//xla/tsl/protobuf:error_codes_proto_impl_cc",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:optional",
         "@eigen_archive//:eigen3",
         "@local_tsl//tsl/platform",
         "@local_tsl//tsl/platform:blocking_counter",
         "@local_tsl//tsl/platform:context",
         "@local_tsl//tsl/platform:cord",
         "@local_tsl//tsl/platform:denormal",
-        "@local_tsl//tsl/platform:env_time",
-        "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:file_statistics",
         "@local_tsl//tsl/platform:load_library",
-        "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:macros",
         "@local_tsl//tsl/platform:mutex",
         "@local_tsl//tsl/platform:path",
         "@local_tsl//tsl/platform:platform_port",
         "@local_tsl//tsl/platform:protobuf",
         "@local_tsl//tsl/platform:regexp",
         "@local_tsl//tsl/platform:setround",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:statusor",
         "@local_tsl//tsl/platform:str_util",
         "@local_tsl//tsl/platform:strcat",
         "@local_tsl//tsl/platform:stringpiece",
         "@local_tsl//tsl/platform:stringprintf",
-        "@local_tsl//tsl/platform:threadpool_interface",
         "@local_tsl//tsl/platform:tracing",
-        "@local_tsl//tsl/platform:types",
     ],
 )
 
@@ -104,7 +103,7 @@ cc_library(
         "nobuilder",
     ],
     deps = [
-        "@local_tsl//tsl/platform:types",
+        "//xla/tsl/platform:types",
     ],
 )
 
@@ -131,7 +130,7 @@ cc_library(
         "no_oss",
         "nobuilder",
     ],
-    deps = ["@local_tsl//tsl/platform:types"],
+    deps = ["//xla/tsl/platform:types"],
 )
 
 cc_library(
@@ -145,8 +144,8 @@ cc_library(
     ],
     deps = [
         ":wide_char",
+        "//xla/tsl/platform:errors",
         "@com_google_absl//absl/status",
-        "@local_tsl//tsl/platform:errors",
     ],
 )
 
@@ -164,8 +163,8 @@ cc_library(
     ],
     deps = [
         ":error_windows",
-        "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:logging",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:logging",
     ],
 )
 
@@ -192,11 +191,11 @@ cc_library(
         "nobuilder",
     ],
     deps = [
+        "//xla/tsl/platform:byte_order",
+        "//xla/tsl/platform:dynamic_annotations",
+        "//xla/tsl/platform:logging",
+        "//xla/tsl/platform:types",
         "@local_tsl//tsl/platform",
-        "@local_tsl//tsl/platform:byte_order",
-        "@local_tsl//tsl/platform:dynamic_annotations",
-        "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:types",
         "@snappy",
     ],
 )
@@ -223,9 +222,9 @@ cc_library(
         "nobuilder",
     ],
     deps = [
+        "//xla/tsl/platform:types",
         "@local_tsl//tsl/platform:mutex",
         "@local_tsl//tsl/platform:stacktrace",
-        "@local_tsl//tsl/platform:types",
     ],
 )
 
@@ -240,12 +239,12 @@ cc_library(
     ],
     textual_hdrs = ["subprocess.h"],
     deps = [
+        "//xla/tsl/platform:logging",
+        "//xla/tsl/platform:macros",
+        "//xla/tsl/platform:types",
         "@local_tsl//tsl/platform",
-        "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:macros",
         "@local_tsl//tsl/platform:mutex",
         "@local_tsl//tsl/platform:strcat",
-        "@local_tsl//tsl/platform:types",
     ],
 )
 

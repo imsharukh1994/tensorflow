@@ -25,6 +25,7 @@ load(
     "if_mkldnn_openmp",
     "onednn_v3_define",
 )
+load("//tensorflow:tf_version.bzl", "TF_VERSION")
 
 #
 # Returns the options to use for a C++ library or binary build.
@@ -81,7 +82,7 @@ load(
     "if_tensorrt_exec",
 )
 load(
-    "@local_tsl//third_party/py/rules_pywrap:pywrap.bzl",
+    "@local_xla//third_party/py/rules_pywrap:pywrap.default.bzl",
     "use_pywrap_rules",
     _pybind_extension = "pybind_extension",
     _stripped_cc_info = "stripped_cc_info",
@@ -93,10 +94,7 @@ def register_extension_info(**kwargs):
 
 # version for the shared libraries, can
 # not contain rc or alpha, only numbers.
-# Also update tensorflow/core/public/version.h
-# and tensorflow/tools/pip_package/setup.py
-WHEEL_VERSION = "2.19.0"
-VERSION = "2.19.0"
+VERSION = TF_VERSION
 VERSION_MAJOR = VERSION.split(".")[0]
 two_gpu_tags = ["requires-gpu-nvidia:2", "manual", "no_pip"]
 
@@ -218,22 +216,9 @@ def if_android_arm64(a):
         "//conditions:default": [],
     })
 
-def if_android_mips(a):
-    return select({
-        clean_dep("//tensorflow:android_mips"): a,
-        "//conditions:default": [],
-    })
-
 def if_not_android(a):
     return select({
         clean_dep("//tensorflow:android"): [],
-        "//conditions:default": a,
-    })
-
-def if_not_android_mips_and_mips64(a):
-    return select({
-        clean_dep("//tensorflow:android_mips"): [],
-        clean_dep("//tensorflow:android_mips64"): [],
         "//conditions:default": a,
     })
 
@@ -334,7 +319,6 @@ def if_not_fuchsia(a):
 def if_linux_x86_64(a):
     return select({
         clean_dep("//tensorflow:linux_x86_64"): a,
-        clean_dep("//tensorflow:haswell"): a,
         "//conditions:default": [],
     })
 
@@ -357,6 +341,7 @@ def if_libtpu(if_true, if_false = []):
     return select({
         # copybara:uncomment_begin(different config setting in OSS)
         # "//tools/cc_target_os:gce": if_true,
+        # "//buildenv/platforms/settings:chrome_linux": if_false,
         # copybara:uncomment_end_and_comment_begin
         clean_dep("//tensorflow:with_tpu_support"): if_true,
         # copybara:comment_end
@@ -1383,6 +1368,7 @@ def _generate_op_reg_offsets_impl(ctx):
         tools = [ctx.executable._offset_counter],
         executable = ctx.executable._offset_counter,
         arguments = [args],
+        use_default_shell_env = True,
     )
 
 generate_op_reg_offsets = rule(
@@ -2231,6 +2217,8 @@ def tf_custom_op_library_additional_deps_impl():
         clean_dep("//tensorflow/core:reader_base"),
     ]
 
+CollectedDepsInfo = provider("CollectedDepsInfo", fields = ["tf_collected_deps"])
+
 # Traverse the dependency graph along the "deps" attribute of the
 # target and return a struct with one field called 'tf_collected_deps'.
 # tf_collected_deps will be the union of the deps of the current target
@@ -2246,9 +2234,9 @@ def _collect_deps_aspect_impl(target, ctx):
         all_deps += ctx.rule.attr.roots
     for dep in all_deps:
         direct.append(dep.label)
-        if hasattr(dep, "tf_collected_deps"):
-            transitive.append(dep.tf_collected_deps)
-    return struct(tf_collected_deps = depset(direct = direct, transitive = transitive))
+        if CollectedDepsInfo in dep:
+            transitive.append(dep[CollectedDepsInfo].tf_collected_deps)
+    return CollectedDepsInfo(tf_collected_deps = depset(direct = direct, transitive = transitive))
 
 collect_deps_aspect = aspect(
     attr_aspects = ["deps", "data", "roots"],
@@ -2267,9 +2255,9 @@ def _check_deps_impl(ctx):
     required_deps = ctx.attr.required_deps
     disallowed_deps = ctx.attr.disallowed_deps
     for input_dep in ctx.attr.deps:
-        if not hasattr(input_dep, "tf_collected_deps"):
+        if CollectedDepsInfo not in input_dep:
             continue
-        collected_deps = sets.make(input_dep.tf_collected_deps.to_list())
+        collected_deps = sets.make(input_dep[CollectedDepsInfo].tf_collected_deps.to_list())
         for disallowed_dep in disallowed_deps:
             if sets.contains(collected_deps, disallowed_dep.label):
                 fail(
@@ -2984,18 +2972,17 @@ def tf_genrule_cmd_append_to_srcs(to_append):
             " >> $(@)")
 
 def _local_exec_transition_impl(settings, attr):
+    modify_execution_info = settings["//command_line_option:modify_execution_info"]
     return {
         # Force all targets in the subgraph to build on the local machine.
-        "//command_line_option:modify_execution_info": ".*=+no-remote-exec",
+        "//command_line_option:modify_execution_info": modify_execution_info + [".*=+no-remote-exec"],
     }
 
 # A transition that forces all targets in the subgraph to be built locally.
 _local_exec_transition = transition(
     implementation = _local_exec_transition_impl,
-    inputs = [],
-    outputs = [
-        "//command_line_option:modify_execution_info",
-    ],
+    inputs = ["//command_line_option:modify_execution_info"],
+    outputs = ["//command_line_option:modify_execution_info"],
 )
 
 def _local_genrule_impl(ctx):
@@ -3222,7 +3209,6 @@ def pybind_extension_opensource(
             compatible_with = compatible_with,
             deprecation = deprecation,
             features = features + ["-use_header_modules"],
-            licenses = licenses,
             restricted_to = restricted_to,
             shared_lib_name = so_file,
             testonly = testonly,
@@ -3572,6 +3558,9 @@ def tfcompile_dfsan_enabled():
 def tfcompile_dfsan_abilists():
     return []
 
+def tfcompile_friends():
+    return ["public"]
+
 def tf_external_workspace_visible(visibility):
     # External workspaces can see this target.
     return ["//visibility:public"]
@@ -3708,7 +3697,7 @@ def if_cuda_tools(if_true, if_false = []):
 # The config is used to determine if we need dependency on pre-built wheels.
 def if_wheel_dependency(if_true, if_false = []):
     return select({
-        "@local_tsl//third_party/py:enable_wheel_dependency": if_true,
+        "@local_xla//third_party/py:enable_wheel_dependency": if_true,
         "//conditions:default": if_false,
     })
 

@@ -17,6 +17,7 @@ limitations under the License.
 #define TENSORFLOW_LITE_DELEGATES_GPU_COMMON_MODEL_BUILDER_H_
 
 #include <limits>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -88,7 +89,8 @@ absl::Status BuildFinalModel(
 absl::Status BuildFromFlatBuffer(const FlatBufferModel& flatbuffer,
                                  const OpResolver& op_resolver,
                                  GraphFloat32* graph,
-                                 bool allow_quant_ops = false);
+                                 bool allow_quant_ops = false,
+                                 bool apply_model_transformations = true);
 
 // Module-internal converter, exposed for unit testing purpose only.
 absl::Status ConvertTfLiteTensorToTensorRef(const TfLiteTensor& tflite_tensor,

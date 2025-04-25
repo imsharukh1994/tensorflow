@@ -97,7 +97,7 @@ cc_library(
     deps = [
         ":exhaustive_op_test_utils",
         "//xla/tsl/util:command_line_flags",
-        "@com_google_googletest//:gtest",
+        "@com_google_googletest//:gtest_for_library",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:test",
     ],
@@ -141,7 +141,7 @@ exhaustive_xla_test(
     shard_count = 50,
     tags = [
         "optonly",
-        "test_xla_cpu_thunks",
+        "test_xla_cpu_no_thunks",
         # This is a big test that we skip for capacity reasons in OSS testing.
         "no_oss",
     ],
@@ -183,7 +183,7 @@ xla_test(
     shard_count = 50,
     tags = [
         "optonly",
-        "test_xla_cpu_thunks",
+        "test_xla_cpu_no_thunks",
         # This is a big test that we skip for capacity reasons in OSS testing.
         "no_oss",
     ],
@@ -250,7 +250,6 @@ exhaustive_xla_test(
     shard_count = 50,
     tags = [
         "optonly",
-        "test_xla_cpu_thunks",
         # This is a big test that we skip for capacity reasons in OSS testing.
         "no_oss",
     ],

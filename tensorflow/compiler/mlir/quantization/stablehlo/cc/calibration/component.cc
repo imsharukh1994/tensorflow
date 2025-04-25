@@ -48,9 +48,9 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/quantization/tensorflow/exported_model.pb.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/python/py_function_lib.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/quantization_options.pb.h"
+#include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/statusor.h"
 #include "tensorflow/core/protobuf/meta_graph.pb.h"
-#include "tsl/platform/errors.h"
-#include "tsl/platform/statusor.h"
 
 namespace mlir::quant::stablehlo {
 namespace {
@@ -104,8 +104,8 @@ absl::Status RunCalibrationPasses(
 }
 
 CalibrationComponent::CalibrationComponent(
-    absl::Nonnull<MLIRContext*> ctx,
-    absl::Nonnull<const PyFunctionLibrary*> py_function_lib,
+    MLIRContext* absl_nonnull ctx,
+    const PyFunctionLibrary* absl_nonnull py_function_lib,
     const absl::string_view src_saved_model_path,
     absl::flat_hash_map<FunctionName, FunctionAlias> function_aliases,
     std::unordered_set<std::string> tags,

@@ -25,6 +25,7 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "flatbuffers/buffer.h"  // from @flatbuffers
 #include "flatbuffers/flatbuffer_builder.h"  // from @flatbuffers
@@ -33,11 +34,11 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/lite/quantization/lite/test_util.h"
 #include "tensorflow/compiler/mlir/lite/schema/schema_generated.h"
 #include "tensorflow/compiler/mlir/lite/schema/schema_utils.h"
+#include "xla/tsl/platform/logging.h"
 #include "tensorflow/core/platform/init_main.h"
 #include "tensorflow/core/platform/path.h"
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/util/command_line_flags.h"
-#include "tsl/platform/logging.h"
 
 // Note: branched from tensorflow/lite/tools/optimize/quantize_weights_test.cc
 

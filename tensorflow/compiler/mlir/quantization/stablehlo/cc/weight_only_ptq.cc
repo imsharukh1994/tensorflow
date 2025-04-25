@@ -40,9 +40,9 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/quantization/tensorflow/exported_model.pb.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/python/py_function_lib.h"
 #include "xla/mlir_hlo/mhlo/transforms/passes.h"
+#include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/statusor.h"
 #include "tensorflow/core/protobuf/meta_graph.pb.h"
-#include "tsl/platform/errors.h"
-#include "tsl/platform/statusor.h"
 
 namespace mlir::quant::stablehlo {
 
@@ -53,7 +53,7 @@ using ::tensorflow::quantization::ExportedModel;
 using ::tensorflow::quantization::PyFunctionLibrary;
 using ::tensorflow::quantization::RunPasses;
 
-WeightOnlyPtqComponent::WeightOnlyPtqComponent(absl::Nonnull<MLIRContext*> ctx)
+WeightOnlyPtqComponent::WeightOnlyPtqComponent(MLIRContext* absl_nonnull ctx)
     : ctx_(ABSL_DIE_IF_NULL(ctx)) {}  // Crash OK
 
 absl::StatusOr<ModuleOp> WeightOnlyPtqComponent::Run(

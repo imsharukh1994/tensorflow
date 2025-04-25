@@ -57,6 +57,7 @@ limitations under the License.
 #include "xla/stream_executor/launch_dim.h"
 #include "xla/stream_executor/platform.h"
 #include "xla/stream_executor/stream.h"
+#include "xla/stream_executor/stream_executor.h"
 #include "xla/stream_executor/typed_kernel_factory.h"
 #include "xla/tsl/protobuf/dnn.pb.h"
 #include "xla/tsl/util/proto/proto_utils.h"
@@ -334,15 +335,15 @@ FindVectorizedFeatureDims(const ConvolutionDimensionNumbers& dnums,
                           const Shape& input, const Shape& filter,
                           const Shape& output) {
   return {
-      FindVectorizedDim(input.dimensions_size(), dnums.input_batch_dimension(),
-                        dnums.input_feature_dimension(),
-                        dnums.input_spatial_dimensions()),
-      FindVectorizedDim(filter.dimensions_size(),
+      FindVectorizedDim(
+          input.dimensions().size(), dnums.input_batch_dimension(),
+          dnums.input_feature_dimension(), dnums.input_spatial_dimensions()),
+      FindVectorizedDim(filter.dimensions().size(),
                         dnums.kernel_input_feature_dimension(),
                         dnums.kernel_output_feature_dimension(),
                         dnums.kernel_spatial_dimensions()),
       FindVectorizedDim(
-          output.dimensions_size(), dnums.output_batch_dimension(),
+          output.dimensions().size(), dnums.output_batch_dimension(),
           dnums.output_feature_dimension(), dnums.output_spatial_dimensions()),
   };
 }
@@ -386,29 +387,20 @@ absl::StatusOr<std::unique_ptr<se::Kernel>> CreateKernel(
   return kernel;
 }
 
-absl::Status ExecuteKernelOnStream(const se::Kernel& kernel,
-                                   absl::Span<const se::DeviceMemoryBase> args,
-                                   const LaunchDimensions& dims,
-                                   se::Stream* stream) {
+absl::Status ExecuteKernelOnStream(
+    se::Kernel& kernel, absl::Span<const se::KernelArgument> args,
+    const LaunchDimensions& dims,
+    const std::optional<se::ClusterDim>& cluster_dim, se::Stream* stream) {
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<se::KernelArgsPackedArrayBase> kernel_args,
       se::PackKernelArgs(args, kernel.metadata()));
 
-  return stream->Launch(dims.thread_counts_per_block(), dims.block_counts(),
-                        kernel, *kernel_args);
-}
-
-absl::Status ExecuteKernelOnStream(const se::Kernel& kernel,
-                                   absl::Span<const se::DeviceMemoryBase> args,
-                                   const LaunchDimensions& dims,
-                                   const se::ClusterDim& cluster_dim,
-                                   se::Stream* stream) {
-  TF_ASSIGN_OR_RETURN(
-      std::unique_ptr<se::KernelArgsPackedArrayBase> kernel_args,
-      se::PackKernelArgs(args, kernel.metadata()));
-
-  return stream->Launch(dims.thread_counts_per_block(), dims.block_counts(),
-                        cluster_dim, kernel, *kernel_args);
+  if (cluster_dim.has_value()) {
+    return kernel.Launch(dims.thread_counts_per_block(), dims.block_counts(),
+                         cluster_dim.value(), stream, *kernel_args);
+  }
+  return kernel.Launch(dims.thread_counts_per_block(), dims.block_counts(),
+                       stream, *kernel_args);
 }
 
 // Unimplemented for integers yet.
@@ -509,10 +501,10 @@ static void InitializeTypedBuffer(se::Stream* stream,
   constexpr int threads_per_block = 256;
   constexpr int blocks_per_grid =
       (host_buffer_bytes + threads_per_block - 1) / threads_per_block;
-  TF_CHECK_OK(stream->ThenLaunch(se::ThreadDim(threads_per_block, 1, 1),
-                                 se::BlockDim(blocks_per_grid, 1, 1), *kernel,
-                                 buffer, host_buffer_bytes,
-                                 static_cast<int64_t>(buffer.size())));
+  TF_CHECK_OK(kernel->Launch(se::ThreadDim(threads_per_block, 1, 1),
+                             se::BlockDim(blocks_per_grid, 1, 1), stream,
+                             buffer, host_buffer_bytes,
+                             static_cast<int64_t>(buffer.size())));
 }
 
 void InitializeBuffer(se::Stream* stream, PrimitiveType buffer_type,
@@ -613,6 +605,10 @@ absl::StatusOr<se::dnn::DataType> GetDNNDataTypeFromPrimitiveType(
       return se::dnn::ToDataType<tsl::float8_e4m3fn>::value;
     case F8E5M2:
       return se::dnn::ToDataType<tsl::float8_e5m2>::value;
+    case F4E2M1FN:
+      return se::dnn::ToDataType<tsl::float4_e2m1fn>::value;
+    case F8E8M0FNU:
+      return se::dnn::ToDataType<tsl::float8_e8m0fnu>::value;
     default:
       break;
   }

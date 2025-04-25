@@ -15,6 +15,11 @@ limitations under the License.
 
 #include "xla/service/spmd/stateful_rng_spmd_partitioner.h"
 
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <utility>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/statusor.h"
@@ -23,17 +28,17 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/pass/hlo_pass_pipeline.h"
+#include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/hlo/transforms/expanders/rng_expander.h"
 #include "xla/hlo/utils/hlo_matchers.h"
 #include "xla/service/hlo_module_config.h"
 #include "xla/service/hlo_verifier.h"
 #include "xla/service/sharding_propagation.h"
-#include "xla/tests/hlo_test_base.h"
+#include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 #include "xla/xla.pb.h"
 #include "xla/xla_data.pb.h"
-#include "tsl/platform/errors.h"
-#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace spmd {
@@ -51,7 +56,7 @@ int64_t CountInstructions(const HloComputation &computation, HloOpcode opcode) {
   return count;
 }
 
-class StatefulRngSpmdPartitionerTest : public HloTestBase {
+class StatefulRngSpmdPartitionerTest : public HloHardwareIndependentTestBase {
  public:
   absl::StatusOr<std::unique_ptr<HloModule>> PartitionComputation(
       absl::string_view hlo_module, int64_t num_partitions,
@@ -191,7 +196,7 @@ ENTRY main {
 }
 
 TEST_F(StatefulRngSpmdPartitionerTest, VerifyThresholdSetCorrectly) {
-  auto debug_options = HloTestBase::GetDebugOptionsForTest();
+  auto debug_options = HloHardwareIndependentTestBase::GetDebugOptionsForTest();
   int64_t threshold = 400;
   debug_options.set_xla_gpu_threshold_for_windowed_einsum_mib(threshold);
   debug_options.set_xla_gpu_multi_streamed_windowed_einsum(true);

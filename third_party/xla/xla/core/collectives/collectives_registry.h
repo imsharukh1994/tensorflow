@@ -20,8 +20,10 @@ limitations under the License.
 #include <memory>
 
 #include "absl/base/attributes.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "xla/core/collectives/collectives.h"
 #include "tsl/platform/logging.h"
 
@@ -43,6 +45,11 @@ class CollectivesRegistry {
 
   // Returns the default collectives implementation for the given platform.
   static absl::StatusOr<Collectives*> Default(absl::string_view platform_name);
+
+  // Return a specific collectives implementation by name for the given
+  // platform.
+  static absl::StatusOr<Collectives*> Get(
+      absl::string_view platform_name, absl::string_view implementation_name);
 };
 
 }  // namespace xla

@@ -18,11 +18,12 @@ limitations under the License.
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/strings/str_split.h"
+#include "absl/log/log.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "tensorflow/c/eager/immediate_execution_context.h"
@@ -65,8 +66,9 @@ limitations under the License.
 namespace tensorflow {
 
 // Maps from a FunctionDef's name to FunctionDef, for a given FunctionDefLibrary
-using FunctionDefMap = gtl::FlatMap<StringPiece, const tensorflow::FunctionDef*,
-                                    StringPieceHasher>;
+using FunctionDefMap =
+    gtl::FlatMap<absl::string_view, const tensorflow::FunctionDef*,
+                 StringPieceHasher>;
 
 // Maps from a functiondef's name to the corresponding "TFConcreteFunction"
 using FlatTensorFunctionMap =

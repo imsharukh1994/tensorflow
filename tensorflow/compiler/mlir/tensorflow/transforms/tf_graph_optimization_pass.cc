@@ -15,9 +15,16 @@ limitations under the License.
 
 #include "tensorflow/compiler/mlir/tensorflow/transforms/tf_graph_optimization_pass.h"
 
+#include <algorithm>
+#include <cassert>
+#include <iterator>
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "llvm/Support/CommandLine.h"
 #include "mlir/IR/Builders.h"  // from @llvm-project
 #include "mlir/IR/Location.h"  // from @llvm-project
@@ -26,15 +33,16 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tensorflow/translate/mlir_roundtrip_flags.h"
 #include "tensorflow/compiler/mlir/tf2xla/api/v2/graph_to_tf_executor.h"
 #include "tensorflow/compiler/mlir/tf2xla/api/v2/tf_executor_to_graph.h"
+#include "xla/tsl/platform/statusor.h"
 #include "tensorflow/core/common_runtime/graph_constructor.h"
 #include "tensorflow/core/common_runtime/optimization_registry.h"
 #include "tensorflow/core/framework/function.h"
+#include "tensorflow/core/framework/function.pb.h"
 #include "tensorflow/core/framework/graph_debug_info.pb.h"
 #include "tensorflow/core/graph/graph.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/status.h"
 #include "tensorflow/core/public/session_options.h"
-#include "tsl/platform/statusor.h"
 
 #define DEBUG_TYPE "run-tf-graph-optimization"
 

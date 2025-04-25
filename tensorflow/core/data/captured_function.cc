@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/core/data/captured_function.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -71,10 +72,7 @@ constexpr char kAllowSmallFunctionOptimizations[] =
 // cares about collecting the CPU time needed to execute a captured function.
 class SimpleStepStatsCollector : public StepStatsCollectorInterface {
  public:
-  void IncrementProcessingTime(int64_t delta) {
-    mutex_lock l(mu_);
-    processing_time_ += delta;
-  }
+  void IncrementProcessingTime(int64_t delta) { processing_time_ += delta; }
 
   NodeExecStatsInterface* CreateNodeExecStats(const NodeDef* node) override {
     return new SimpleNodeExecStats(this);
@@ -84,10 +82,7 @@ class SimpleStepStatsCollector : public StepStatsCollectorInterface {
     return "";
   }
 
-  int64_t processing_time() {
-    tf_shared_lock l(mu_);
-    return processing_time_;
-  }
+  int64_t processing_time() { return processing_time_.load(); }
 
  private:
   class SimpleNodeExecStats : public NodeExecStatsInterface {
@@ -127,8 +122,7 @@ class SimpleStepStatsCollector : public StepStatsCollectorInterface {
     SimpleStepStatsCollector* step_stats_collector_;  // Not owned.
   };
 
-  mutex mu_;
-  int64_t processing_time_ TF_GUARDED_BY(mu_) = 0;
+  std::atomic<int64_t> processing_time_ = 0;
 };
 
 absl::Status GetCapturedInput(const CapturedFunction* const func, int index,
@@ -402,8 +396,8 @@ class BorrowedArgsCallFrame : public CallFrameBase {
 absl::Status MakeIteratorFromInputElement(
     IteratorContext* ctx, const DatasetBaseIterator* parent,
     const std::vector<Tensor>& input_element, int64_t thread_index,
-    const InstantiatedCapturedFunction& inst_captured_func, StringPiece prefix,
-    std::unique_ptr<IteratorBase>* out_iterator) {
+    const InstantiatedCapturedFunction& inst_captured_func,
+    absl::string_view prefix, std::unique_ptr<IteratorBase>* out_iterator) {
   return MakeIteratorFromInputElement(ctx, parent, input_element, thread_index,
                                       inst_captured_func, prefix, out_iterator,
                                       /*node=*/nullptr);
@@ -412,8 +406,8 @@ absl::Status MakeIteratorFromInputElement(
 absl::Status MakeIteratorFromInputElement(
     IteratorContext* ctx, const DatasetBaseIterator* parent,
     const std::vector<Tensor>& input_element, int64_t thread_index,
-    const InstantiatedCapturedFunction& inst_captured_func, StringPiece prefix,
-    std::unique_ptr<IteratorBase>* out_iterator,
+    const InstantiatedCapturedFunction& inst_captured_func,
+    absl::string_view prefix, std::unique_ptr<IteratorBase>* out_iterator,
     const std::shared_ptr<model::Node>& node) {
   std::vector<Tensor> return_values;
 

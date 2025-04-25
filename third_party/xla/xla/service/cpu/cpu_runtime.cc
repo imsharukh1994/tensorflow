@@ -20,7 +20,6 @@ limitations under the License.
 #include <cstdio>
 #include <cstring>
 #include <iterator>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -30,32 +29,40 @@ limitations under the License.
 #include "absl/base/attributes.h"
 #include "absl/base/dynamic_annotations.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "xla/backends/cpu/collectives/cpu_clique_key.h"
+#include "xla/backends/cpu/collectives/cpu_cliques.h"
+#include "xla/backends/cpu/collectives/cpu_collectives.h"
+#include "xla/backends/cpu/collectives/in_process_collectives.h"
+#include "xla/core/collectives/communicator.h"
+#include "xla/core/collectives/rank_id.h"
 #include "xla/executable_run_options.h"
 #include "xla/hlo/parser/hlo_parser.h"
 #include "xla/layout_util.h"
+#include "xla/primitive_util.h"
 #include "xla/service/collective_ops_utils.h"
 #include "xla/service/computation_placer.h"
-#include "xla/service/cpu/collectives_interface.h"
 #include "xla/service/cpu/cpu_executable_run_options.h"
-#include "xla/service/cpu/in_process_collectives.h"
 #include "xla/service/cpu/xfeed_manager.h"
 #include "xla/service/global_device_id.h"
 #include "xla/shape_util.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/stream_executor.h"
+#include "xla/tsl/concurrency/async_value_ref.h"
+#include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/logging.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
-#include "tsl/platform/errors.h"
-#include "tsl/platform/logging.h"
-#include "tsl/platform/status.h"
 #include "tsl/profiler/lib/traceme.h"
 
 namespace xla {
@@ -63,8 +70,8 @@ namespace cpu {
 namespace runtime {
 
 XfeedManager* GetXfeedManager(int device_ordinal) {
-  static auto* managers = new absl::flat_hash_map<int, XfeedManager*>();
-  static absl::Mutex* mutex = new absl::Mutex();
+  static auto* const managers = new absl::flat_hash_map<int, XfeedManager*>();
+  static absl::Mutex* const mutex = new absl::Mutex();
 
   absl::MutexLock lock(mutex);
   auto it = managers->find(device_ordinal);
@@ -115,6 +122,8 @@ extern const char* const kEigenConv3DF16SymbolName =
     "__xla_cpu_runtime_EigenConv3DF16";
 extern const char* const kEigenConv3DF32SymbolName =
     "__xla_cpu_runtime_EigenConv3DF32";
+extern const char* const kLegacyDuccFftSymbolName =
+    "__xla_cpu_runtime_LegacyDuccFft";
 extern const char* const kDuccFftSymbolName = "__xla_cpu_runtime_DuccFft";
 extern const char* const kDuccSingleThreadedFftSymbolName =
     "__xla_cpu_runtime_DuccSingleThreadedFft";
@@ -333,13 +342,12 @@ RendezvousKey GetRendezvousKey(const ExecutableRunOptions* run_options,
                        num_local_participants, op_kind, op_id};
 }
 
-CollectivesInterface* GetInProcessCollectivesImpl() {
+CpuCollectives* GetInProcessCollectivesImpl() {
   static InProcessCollectives* c = new InProcessCollectives();
   return c;
 }
 
-CollectivesInterface* GetCollectivesImpl(
-    const ExecutableRunOptions* run_options) {
+CpuCollectives* GetCollectivesImpl(const ExecutableRunOptions* run_options) {
   if (run_options->cpu_executable_run_options() &&
       run_options->cpu_executable_run_options()->collectives()) {
     return run_options->cpu_executable_run_options()->collectives();
@@ -380,19 +388,32 @@ void AllToAllImpl(const ExecutableRunOptions* run_options,
 
   int rank = RankInGlobalDevices(rendezvous_key.global_devices, device).value();
 
-  CollectivesInterface* collectives = GetCollectivesImpl(run_options);
+  CpuCollectives* collectives = GetCollectivesImpl(run_options);
 
   ABSL_ANNOTATE_MEMORY_IS_INITIALIZED(source_buffers,
                                       sizeof(void*) * num_buffers);
   ABSL_ANNOTATE_MEMORY_IS_INITIALIZED(destination_buffers,
                                       sizeof(void*) * num_buffers);
-  auto communicator =
-      collectives->GetCommunicator(rendezvous_key.global_devices, rank).value();
-  TF_CHECK_OK(communicator->AllToAll(
-      rendezvous_key, buffer_size,
-      absl::Span<const void* const>(source_buffers, num_buffers),
-      absl::Span<void* const>(destination_buffers, num_buffers),
-      DefaultCollectiveTimeout()));
+
+  CpuCliqueKey clique_key(rendezvous_key.global_devices);
+  Communicator* communicator =
+      AcquireCommunicator(collectives, clique_key, RankId(rank)).value();
+
+  CpuCollectives::Executor executor(rendezvous_key, DefaultCollectiveTimeout());
+
+  std::vector<se::DeviceMemoryBase> source_buffers_data;
+  std::vector<se::DeviceMemoryBase> destination_buffers_data;
+  for (int i = 0; i < num_buffers; i++) {
+    source_buffers_data.push_back(
+        se::DeviceMemoryBase(source_buffers[i], buffer_size));
+    destination_buffers_data.push_back(
+        se::DeviceMemoryBase(destination_buffers[i], buffer_size));
+  }
+
+  auto event = communicator->AllToAll(
+      source_buffers_data, destination_buffers_data, U8, buffer_size, executor);
+  tsl::BlockUntilReady(event);
+  CHECK(!event.IsError()) << event.GetError();
 }
 
 ABSL_ATTRIBUTE_NO_SANITIZE_MEMORY
@@ -412,13 +433,20 @@ void AllGatherImpl(const ExecutableRunOptions* run_options,
 
   int rank = RankInGlobalDevices(rendezvous_key.global_devices, device).value();
 
-  CollectivesInterface* collectives = GetCollectivesImpl(run_options);
+  CpuCollectives* collectives = GetCollectivesImpl(run_options);
 
-  auto communicator =
-      collectives->GetCommunicator(rendezvous_key.global_devices, rank).value();
-  TF_CHECK_OK(communicator->AllGather(rendezvous_key, buffer_size,
-                                      source_buffer, destination_buffer,
-                                      DefaultCollectiveTimeout()));
+  CpuCliqueKey clique_key(rendezvous_key.global_devices);
+  Communicator* communicator =
+      AcquireCommunicator(collectives, clique_key, RankId(rank)).value();
+
+  se::DeviceMemoryBase input_buffer_data(source_buffer, buffer_size);
+  se::DeviceMemoryBase output_buffer_data(destination_buffer, buffer_size);
+
+  CpuCollectives::Executor executor(rendezvous_key, DefaultCollectiveTimeout());
+  auto event = communicator->AllGather(input_buffer_data, output_buffer_data,
+                                       U8, buffer_size, executor);
+  tsl::BlockUntilReady(event);
+  CHECK(!event.IsError()) << event.GetError();
 }
 
 ABSL_ATTRIBUTE_NO_SANITIZE_MEMORY
@@ -441,14 +469,26 @@ void ReduceScatterImpl(const ExecutableRunOptions* run_options,
 
   int rank = RankInGlobalDevices(rendezvous_key.global_devices, device).value();
 
-  CollectivesInterface* collectives = GetCollectivesImpl(run_options);
+  CpuCollectives* collectives = GetCollectivesImpl(run_options);
 
-  auto communicator =
-      collectives->GetCommunicator(rendezvous_key.global_devices, rank).value();
-  TF_CHECK_OK(communicator->ReduceScatter(
-      rendezvous_key, static_cast<ReductionKind>(reduction_kind),
-      static_cast<PrimitiveType>(element_type), chunk_elems, input_buffer,
-      output_buffer, DefaultCollectiveTimeout()));
+  CpuCliqueKey clique_key(rendezvous_key.global_devices);
+  Communicator* communicator =
+      AcquireCommunicator(collectives, clique_key, RankId(rank)).value();
+
+  auto dtype = static_cast<PrimitiveType>(element_type);
+
+  se::DeviceMemoryBase input_buffer_data(input_buffer,
+                                         primitive_util::ByteWidth(dtype));
+  se::DeviceMemoryBase output_buffer_data(output_buffer,
+                                          primitive_util::ByteWidth(dtype));
+
+  CpuCollectives::Executor executor(rendezvous_key, DefaultCollectiveTimeout());
+  auto event = communicator->ReduceScatter(
+      input_buffer_data, output_buffer_data, dtype, chunk_elems,
+      static_cast<ReductionKind>(reduction_kind), executor);
+
+  tsl::BlockUntilReady(event);
+  CHECK(!event.IsError()) << event.GetError();
 }
 
 ABSL_ATTRIBUTE_NO_SANITIZE_MEMORY
@@ -478,16 +518,33 @@ void AllReduceImpl(const ExecutableRunOptions* run_options,
 
   int rank = RankInGlobalDevices(rendezvous_key.global_devices, device).value();
 
-  CollectivesInterface* collectives = GetCollectivesImpl(run_options);
+  CpuCollectives* collectives = GetCollectivesImpl(run_options);
 
-  auto communicator =
-      collectives->GetCommunicator(rendezvous_key.global_devices, rank).value();
+  CpuCliqueKey clique_key(rendezvous_key.global_devices);
+  Communicator* communicator =
+      AcquireCommunicator(collectives, clique_key, RankId(rank)).value();
+
+  // Convert input/output buffers to DeviceMemoryBase.
+  std::vector<se::DeviceMemoryBase> input_buffers_data;
+  std::vector<se::DeviceMemoryBase> output_buffers_data;
   for (int i = 0; i < num_buffers; i++) {
     Shape subshape = num_buffers == 1 ? shape : shape.tuple_shapes(i);
-    TF_CHECK_OK(communicator->AllReduce(
-        rendezvous_key, static_cast<ReductionKind>(reduction_kind),
-        subshape.element_type(), ShapeUtil::ElementsIn(subshape),
-        input_buffers[i], output_buffers[i], DefaultCollectiveTimeout()));
+    input_buffers_data.push_back(se::DeviceMemoryBase(
+        input_buffers[i], ShapeUtil::ByteSizeOf(subshape)));
+    output_buffers_data.push_back(se::DeviceMemoryBase(
+        output_buffers[i], ShapeUtil::ByteSizeOf(subshape)));
+  }
+
+  CpuCollectives::Executor executor(rendezvous_key, DefaultCollectiveTimeout());
+
+  for (int i = 0; i < num_buffers; i++) {
+    Shape subshape = num_buffers == 1 ? shape : shape.tuple_shapes(i);
+    auto event = communicator->AllReduce(
+        input_buffers_data[i], output_buffers_data[i], subshape.element_type(),
+        ShapeUtil::ElementsIn(subshape),
+        static_cast<ReductionKind>(reduction_kind), executor);
+    tsl::BlockUntilReady(event);
+    CHECK(!event.IsError()) << event.GetError();
   }
 }
 
@@ -506,19 +563,19 @@ void CollectivePermuteImpl(const ExecutableRunOptions* run_options,
   int32_t logical_device_id =
       channel_id_present ? logical_id.computation_id : logical_id.replica_id;
 
-  std::optional<int> source_replica_id;
-  std::vector<int> copy_to;
+  std::optional<RankId> source_replica_id;
+  std::vector<RankId> copy_to;
   for (auto& p : pairs) {
     std::vector<std::string> mapping = absl::StrSplit(p, '=');
     CHECK_EQ(mapping.size(), 2);
     int from = std::stoi(mapping[0]);
     int to = std::stoi(mapping[1]);
     if (from == logical_device_id) {
-      copy_to.push_back(to);
+      copy_to.push_back(RankId(to));
     }
     if (to == logical_device_id) {
       CHECK(!source_replica_id.has_value());
-      source_replica_id = from;
+      source_replica_id = RankId(from);
     }
   }
   RendezvousKey rendezvous_key =
@@ -527,13 +584,22 @@ void CollectivePermuteImpl(const ExecutableRunOptions* run_options,
 
   int rank = RankInGlobalDevices(rendezvous_key.global_devices, device).value();
 
-  CollectivesInterface* collectives = GetCollectivesImpl(run_options);
+  CpuCollectives* collectives = GetCollectivesImpl(run_options);
 
-  auto communicator =
-      collectives->GetCommunicator(rendezvous_key.global_devices, rank).value();
-  TF_CHECK_OK(communicator->CollectivePermute(
-      rendezvous_key, byte_size, source_replica_id, copy_to, input_buffer,
-      output_buffer, DefaultCollectiveTimeout()));
+  CpuCliqueKey clique_key(rendezvous_key.global_devices);
+  Communicator* communicator =
+      AcquireCommunicator(collectives, clique_key, RankId(rank)).value();
+
+  CpuCollectives::Executor executor(rendezvous_key, DefaultCollectiveTimeout());
+
+  se::DeviceMemoryBase input_buffer_data(input_buffer, byte_size);
+  se::DeviceMemoryBase output_buffer_data(output_buffer, byte_size);
+
+  auto event = communicator->CollectivePermute(
+      input_buffer_data, output_buffer_data, U8, byte_size, source_replica_id,
+      copy_to, executor);
+  tsl::BlockUntilReady(event);
+  CHECK(!event.IsError()) << event.GetError();
 }
 }  // namespace
 }  // namespace runtime

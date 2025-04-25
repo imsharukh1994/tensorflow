@@ -23,11 +23,13 @@ limitations under the License.
 #include <string>
 
 #include "absl/container/inlined_vector.h"
+#include "absl/log/check.h"
+#include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
 #include "xla/printer.h"
+#include "xla/tsl/platform/logging.h"  // IWYU pragma: keep
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
-#include "tsl/platform/logging.h"  // IWYU pragma: keep
 
 namespace xla {
 
@@ -47,7 +49,6 @@ class Tile {
     return Tile(tile_proto.dimensions());
   }
   TileProto ToProto() const;
-  void SetProto(TileProto& tile_proto) const;
 
   bool operator==(const Tile& other) const {
     return dimensions() == other.dimensions();
@@ -97,7 +98,8 @@ using TileVector = absl::InlinedVector<Tile, 3>;
 // where the splits occur. For example, if the dimension contains 1024 elements,
 // a split indices value of {512} indicates splitting this dimension into two
 // right through the middle. The dimension here refers to the physical dimension
-// such that 0 is the majormost dimension and rank-1 is the minormost dimension.
+// such that 0 is the majormost dimension and (number of dimensions - 1) is the
+// minormost dimension.
 class SplitConfig {
  public:
   SplitConfig(int64_t dimension, absl::Span<const int64_t> split_indices)
@@ -183,7 +185,9 @@ class Layout {
   Layout& operator=(const Layout& other);
   Layout& operator=(Layout&& other);
 
-  // Construct a shape from a LayoutProto.
+  // Creates a Layout from a LayoutProto. If the proto has logically invalid
+  // fields, this will return a Layout that will fail to validate, but will not
+  // crash.
   static Layout CreateFromProto(const LayoutProto& proto);
 
   // Returns a LayoutProto representation of the Layout.
@@ -351,12 +355,16 @@ class Layout {
     minor_to_major_.clear();
     return *this;
   }
+
+  absl::Span<const int64_t> minor_to_major() const { return minor_to_major_; }
+  DimensionVector* mutable_minor_to_major() { return &minor_to_major_; }
+
   // Removes the given dimension from 'minor_to_major_', and adjusts the other
   // dimensions accordingly. Also adjusts 'dim_level_types_', 'dim_ordered_' and
   // 'dim_unique_' in case it is a sparse layout.
-  Layout& DeleteDimension(int64_t dim_to_delete);
-  absl::Span<const int64_t> minor_to_major() const { return minor_to_major_; }
-  DimensionVector* mutable_minor_to_major() { return &minor_to_major_; }
+  //
+  // Precondition: dim_to_delete is in the range [0, minor_to_major_size()).
+  Layout& DeleteDimension(int dim_to_delete);
 
   // Methods for accessing the tile field.
   int64_t tiles_size() const { return tiles_.size(); }
@@ -382,8 +390,11 @@ class Layout {
   int64_t tail_padding_alignment_in_elements() const {
     return tail_padding_alignment_in_elements_;
   }
+
+  // Sets the tail_padding_alignment_in_elements value. If the value is less
+  // than 1, it will log a fatal error.
   Layout& set_tail_padding_alignment_in_elements(int64_t value) {
-    tail_padding_alignment_in_elements_ = value;
+    set_tail_padding_alignment_in_elements(value, ActionOnError::kCheckFail);
     return *this;
   }
 
@@ -456,15 +467,39 @@ class Layout {
   }
 
  private:
+  // What to do if a method encounters an error.
+  enum class ActionOnError {
+    kCheckFail,
+    kWarning,
+  };
+
   // We store a single inlined vector to hold
   struct DimInfo {
     DimInfo()
-        : dim_level_type(DIM_DENSE), dim_unique(false), dim_ordered(false) {}
+        : dim_level_type(DIM_DENSE), dim_unique(true), dim_ordered(true) {}
 
     DimLevelType dim_level_type : 6;
     bool dim_unique : 1;
     bool dim_ordered : 1;
   };
+
+  // Sets the tail_padding_alignment_in_elements value. If the value is less
+  // than 1, it will log a warning or fatal error depending on the error action.
+  void set_tail_padding_alignment_in_elements(
+      const int64_t value, const ActionOnError error_action) {
+    if (value < 1) {
+      const std::string error_message = absl::StrCat(
+          "tail_padding_alignment_in_elements must be >= 1. Actual value: ",
+          value);
+      if (error_action == ActionOnError::kCheckFail) {
+        LOG(FATAL) << error_message;
+      } else {
+        LOG(WARNING) << error_message;
+      }
+    }
+    tail_padding_alignment_in_elements_ = value;
+  }
+
   absl::InlinedVector<DimInfo, InlineRank()> dim_attributes_;
 
   uint8_t n_dim_level_types_ = 0;
@@ -503,13 +538,15 @@ class Layout {
   // the tensor is split between different physical memories.
   absl::InlinedVector<SplitConfig, 1> split_configs_;
 
-  // The shape is padded at the end to multiple of, in terms of number of
-  // elements. This is useful when tiling does not bring the shape to certain
-  // desired granules. Tiling effectively pads/reshapes/transposes the shape
-  // to another shape. This field pads the total number of elements of that
-  // new shape to a multiple of certain number of elements. This is useful such
-  // as we want a layout which does not tile the data but still requires it to
-  // be padded to certain number of elements.
+  // The shape is padded at the end to a multiple of, in terms of number of
+  // elements, this value. This is useful when tiling does not bring the shape
+  // to certain desired granules. Tiling effectively pads/reshapes/transposes
+  // the shape to another shape. This field pads the total number of elements of
+  // that new shape to a multiple of certain number of elements. This is useful
+  // such as we want a layout which does not tile the data but still requires it
+  // to be padded to certain number of elements.
+  //
+  // Invariant: this must be >= 1.
   int64_t tail_padding_alignment_in_elements_ = 1;
 
   // The physical on-device shape used to represent a sparse array.

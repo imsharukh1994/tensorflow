@@ -28,6 +28,7 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/process_function_library_runtime.h"
 #include "tensorflow/core/framework/device.h"
 #include "tensorflow/core/framework/function.h"
+#include "tensorflow/core/framework/function.pb.h"
 #include "tensorflow/core/framework/graph.pb.h"
 #include "tensorflow/core/public/session_options.h"
 
@@ -55,11 +56,11 @@ class FallbackState {
   static absl::StatusOr<std::unique_ptr<FallbackState>> CreateWithDeviceMgr(
       const SessionOptions &session_options,
       const tensorflow::FunctionDefLibrary &fdef_lib,
-      absl::Nonnull<DynamicDeviceMgr *> device_mgr);
+      DynamicDeviceMgr *absl_nonnull device_mgr);
 
   FallbackState(const SessionOptions &session_options,
                 std::variant<std::vector<std::unique_ptr<Device>>,
-                             absl::Nonnull<DynamicDeviceMgr *>>
+                             DynamicDeviceMgr *absl_nonnull>
                     device_mgr,
                 const tensorflow::FunctionDefLibrary &fdef_lib);
 
@@ -92,7 +93,7 @@ class FallbackState {
  private:
   SessionOptions session_options_;
   DynamicDeviceMgr device_manager_;
-  absl::Nonnull<DynamicDeviceMgr *> device_manager_ptr_;
+  DynamicDeviceMgr *absl_nonnull device_manager_ptr_;
   DeviceSet device_set_;
   FunctionLibraryDefinition func_lib_def_;
   ProcessFunctionLibraryRuntime pflr_;

@@ -13,6 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include <cstdint>
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include "absl/container/flat_hash_set.h"
 #include "llvm/ADT/StringRef.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
@@ -64,19 +69,17 @@ class PrepareTpuComputationForTfExportPass
 class RewriteXlaHostComputeMlir
     : public OpRewritePattern<TF::_XlaHostComputeMlirOp> {
  public:
-  using OpRewritePattern<TF::_XlaHostComputeMlirOp>::OpRewritePattern;
+  using OpRewritePattern::OpRewritePattern;
 
-  LogicalResult match(TF::_XlaHostComputeMlirOp op) const override {
+  LogicalResult matchAndRewrite(TF::_XlaHostComputeMlirOp op,
+                                PatternRewriter& rewriter) const override {
     if (op.getManualSharding()) {
       // This rewrite does not support manual_sharding. It is expected that the
       // _XlaHostComputeMlirOp registered as an MlirXlaOpKernel will handle this
       // case later once the XlaBuilder graph reaches it.
       return failure();
     }
-    return success();
-  }
-  void rewrite(TF::_XlaHostComputeMlirOp op,
-               PatternRewriter& rewriter) const override {
+
     llvm::SmallVector<Attribute> shape_attrs;
     shape_attrs.reserve(op.getNumResults());
     for (Type ty : op.getResultTypes()) {
@@ -136,6 +139,7 @@ class RewriteXlaHostComputeMlir
         op.getRecvKeyAttr(),
         /*cost_estimate_ns=*/rewriter.getI64IntegerAttr(kDefaultCostEstimate),
         /*tpu_core=*/rewriter.getI64IntegerAttr(0));
+    return success();
   }
 };
 
@@ -166,7 +170,7 @@ LogicalResult RewriteCommunicationOps(ModuleOp module) {
   MLIRContext* ctx = module.getContext();
   mlir::RewritePatternSet patterns(ctx);
   patterns.add<RewriteXlaHostComputeMlir>(ctx);
-  if (failed(mlir::applyPatternsAndFoldGreedily(module, std::move(patterns)))) {
+  if (failed(mlir::applyPatternsGreedily(module, std::move(patterns)))) {
     return module.emitError("failed to apply tf export preparation patterns");
   }
 

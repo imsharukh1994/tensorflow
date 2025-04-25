@@ -1,6 +1,7 @@
 """TensorFlow workspace initialization. Consult the WORKSPACE on how to use it."""
 
 # Import third party config rules.
+load("@bazel_features//:deps.bzl", "bazel_features_deps")
 load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
 load("@bazel_skylib//lib:versions.bzl", "versions")
 
@@ -39,9 +40,11 @@ load("//third_party/implib_so:workspace.bzl", implib_so = "repo")
 load("//third_party/jpeg:workspace.bzl", jpeg = "repo")
 load("//third_party/kissfft:workspace.bzl", kissfft = "repo")
 load("//third_party/libprotobuf_mutator:workspace.bzl", libprotobuf_mutator = "repo")
+load("//third_party/libwebp:workspace.bzl", libwebp = "repo")
 load("//third_party/llvm:setup.bzl", "llvm_setup")
 load("//third_party/nanobind:workspace.bzl", nanobind = "repo")
 load("//third_party/nasm:workspace.bzl", nasm = "repo")
+load("//third_party/nvshmem:workspace.bzl", nvshmem = "repo")
 load("//third_party/opencl_headers:workspace.bzl", opencl_headers = "repo")
 load("//third_party/pasta:workspace.bzl", pasta = "repo")
 load("//third_party/py:python_configure.bzl", "python_configure")
@@ -64,6 +67,7 @@ def _initialize_third_party():
     FP16()
     absl()
     bazel_skylib_workspace()
+    bazel_features_deps()
     benchmark()
     ducc()
     dlpack()
@@ -79,6 +83,7 @@ def _initialize_third_party():
     jpeg()
     kissfft()
     libprotobuf_mutator()
+    libwebp()
     ml_dtypes()
     nanobind()
     nasm()
@@ -93,6 +98,7 @@ def _initialize_third_party():
     stablehlo()
     vulkan_headers()
     tensorrt()
+    nvshmem()
     triton()
 
     # copybara: tsl vendor
@@ -151,21 +157,21 @@ def _tf_repositories():
     # c) TF's automation will then upload the mirrored archive. For more information as well as
     # how to manually upload a mirror if necessary, see go/tf_mirror_md.
 
-    # LINT.IfChange
+    # LINT.IfChange(xnnpack)
     tf_http_archive(
         name = "XNNPACK",
-        sha256 = "2a33eb922e6a4b55dfe9332ac61c8d4d128ae8f9e24e873e756a474e983d50a1",
-        strip_prefix = "XNNPACK-02764b305b430aec42c3df85ba32b9a3f8d6e3d4",
-        urls = tf_mirror_urls("https://github.com/google/XNNPACK/archive/02764b305b430aec42c3df85ba32b9a3f8d6e3d4.zip"),
+        sha256 = "3fc19fcedc7aadd02c2cab647dadd5aef9bf3cf9bafd16d2c7a392c52df5c98b",
+        strip_prefix = "XNNPACK-240217afed5486735a54444e7d42bbf894da2483",
+        urls = tf_mirror_urls("https://github.com/google/XNNPACK/archive/240217afed5486735a54444e7d42bbf894da2483.zip"),
     )
     # LINT.ThenChange(//tensorflow/lite/tools/cmake/modules/xnnpack.cmake)
 
     # XNNPack dependency.
     tf_http_archive(
         name = "KleidiAI",
-        sha256 = "8ba8cdb9f945941174d34d10eb4ad158ad1cbc1aef259de5ad992b0bbe85861f",
-        strip_prefix = "kleidiai-7e8c4baf953227fa447a2f345e5d6491a504aa56",
-        urls = tf_mirror_urls("https://gitlab.arm.com/kleidi/kleidiai/-/archive/7e8c4baf953227fa447a2f345e5d6491a504aa56/kleidiai-7e8c4baf953227fa447a2f345e5d6491a504aa56.zip"),
+        sha256 = "cb6af19d3ef21a0c683bd0c7c5b455c386dee0b7d0d4bc2cc0e14503019ff1e8",
+        strip_prefix = "kleidiai-1.4.0",
+        urls = tf_mirror_urls("https://github.com/ARM-software/kleidiai/archive/refs/tags/v1.4.0.zip"),
     )
 
     tf_http_archive(
@@ -175,28 +181,30 @@ def _tf_repositories():
         urls = tf_mirror_urls("https://github.com/Maratyszcza/FXdiv/archive/63058eff77e11aa15bf531df5dd34395ec3017c8.zip"),
     )
 
+    # LINT.IfChange(pthreadpool)
     tf_http_archive(
         name = "pthreadpool",
-        sha256 = "a4cf06de57bfdf8d7b537c61f1c3071bce74e57524fe053e0bbd2332feca7f95",
-        strip_prefix = "pthreadpool-4fe0e1e183925bf8cfa6aae24237e724a96479b8",
-        urls = tf_mirror_urls("https://github.com/Maratyszcza/pthreadpool/archive/4fe0e1e183925bf8cfa6aae24237e724a96479b8.zip"),
+        sha256 = "745e56516d6a58d183eb33d9017732d87cff43ce9f78908906f9faa52633e421",
+        strip_prefix = "pthreadpool-b92447772365661680f486e39a91dfe6675adafc",
+        urls = tf_mirror_urls("https://github.com/google/pthreadpool/archive/b92447772365661680f486e39a91dfe6675adafc.zip"),
     )
+    # LINT.ThenChange(//tensorflow/lite/cmake/DownloadPThreadPool.cmake)
 
     tf_http_archive(
         name = "cpuinfo",
-        sha256 = "52e0ffd7998d8cb3a927d8a6e1145763744d866d2be09c4eccea27fc157b6bb0",
-        strip_prefix = "cpuinfo-cebb0933058d7f181c979afd50601dc311e1bf8c",
+        sha256 = "593ac799e8c9382362e7b29a58917053299fa906e271185204bb571465bb2f79",
+        strip_prefix = "cpuinfo-b73ae6ce38d5dd0b7fe46dbe0a4b5f4bab91c7ea",
         patch_file = ["//third_party/cpuinfo:cpuinfo_ppc64le_support.patch"],
-        urls = tf_mirror_urls("https://github.com/pytorch/cpuinfo/archive/cebb0933058d7f181c979afd50601dc311e1bf8c.zip"),
+        urls = tf_mirror_urls("https://github.com/pytorch/cpuinfo/archive/b73ae6ce38d5dd0b7fe46dbe0a4b5f4bab91c7ea.zip"),
     )
 
     tf_http_archive(
         name = "cudnn_frontend_archive",
         build_file = "//third_party:cudnn_frontend.BUILD",
         patch_file = ["//third_party:cudnn_frontend_header_fix.patch"],
-        sha256 = "5f77784dc3ccbca7aca5ea0b5a6e31b95aa85023c5942d22be5fa8dd6c339d81",
-        strip_prefix = "cudnn-frontend-1.8.0",
-        urls = tf_mirror_urls("https://github.com/NVIDIA/cudnn-frontend/archive/refs/tags/v1.8.0.zip"),
+        sha256 = "34dfe01057e43e799af207522aa0c863ad3177f8c1568b6e7a7e4ccf1cbff769",
+        strip_prefix = "cudnn-frontend-1.11.0",
+        urls = tf_mirror_urls("https://github.com/NVIDIA/cudnn-frontend/archive/refs/tags/v1.11.0.zip"),
     )
 
     tf_http_archive(
@@ -218,6 +226,7 @@ def _tf_repositories():
     tf_http_archive(
         name = "onednn",
         build_file = "//third_party/mkl_dnn:mkldnn_v1.BUILD",
+        patch_file = ["//third_party/mkl_dnn:setting_init.patch"],
         sha256 = "8356aa9befde4d4ff93f1b016ac4310730b2de0cc0b8c6c7ce306690bc0d7b43",
         strip_prefix = "oneDNN-3.5",
         urls = tf_mirror_urls("https://github.com/oneapi-src/oneDNN/archive/refs/tags/v3.5.tar.gz"),
@@ -248,6 +257,8 @@ def _tf_repositories():
         patch_file = [
             "//third_party/compute_library:compute_library.patch",
             "//third_party/compute_library:acl_thread_local_scheduler.patch",
+            "//third_party/compute_library:exclude_omp_scheduler.patch",
+            "//third_party/compute_library:include_string.patch",
         ],
         sha256 = "c4ca329a78da380163b2d86e91ba728349b6f0ee97d66e260a694ef37f0b0d93",
         strip_prefix = "ComputeLibrary-23.05.1",
@@ -405,9 +416,28 @@ def _tf_repositories():
 
     tf_http_archive(
         name = "com_google_googletest",
-        sha256 = "81964fe578e9bd7c94dfdb09c8e4d6e6759e19967e397dbea48d1c10e45d0df2",
-        strip_prefix = "googletest-release-1.12.1",
-        urls = tf_mirror_urls("https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz"),
+        # Use the commit on 2025/3/21:
+        # https://github.com/google/googletest/commit/2ae29b52fdff88c52fef655fa0d245fc514ca35b
+        sha256 = "21a3a4021fd5e3127c90547234e2126d24f23571fedefa0d9370bf706a870fba",
+        strip_prefix = "googletest-2ae29b52fdff88c52fef655fa0d245fc514ca35b",
+        # Patch googletest to:
+        #   - avoid dependencies on @fuchsia_sdk,
+        #   - refer to re2 as @com_googlesource_code_re2,
+        #   - refer to abseil as @com_google_absl.
+        #
+        # To update the patch, run:
+        # $ cd ~
+        # $ mkdir -p github
+        # $ cd github
+        # $ git clone https://github.com/google/googletest.git
+        # $ cd googletest
+        # $ git checkout 2ae29b52fdff88c52fef655fa0d245fc514ca35b
+        # ... make local changes to googletest ...
+        # $ git diff > <client-root>/third_party/tensorflow/third_party/googletest/googletest.patch
+        #
+        # The patch path is relative to third_party/tensorflow.
+        patch_file = ["//third_party/googletest:googletest.patch"],
+        urls = tf_mirror_urls("https://github.com/google/googletest/archive/2ae29b52fdff88c52fef655fa0d245fc514ca35b.zip"),
     )
 
     tf_http_archive(
@@ -444,7 +474,7 @@ def _tf_repositories():
             "//third_party/grpc:register_go_toolchain.patch",
         ],
         system_link_files = {
-            "//third_party/systemlibs:BUILD": "bazel/BUILD",
+            "//third_party/systemlibs:BUILD.bazel": "bazel/BUILD",
             "//third_party/systemlibs:grpc.BUILD": "src/compiler/BUILD",
             "//third_party/systemlibs:grpc.bazel.grpc_deps.bzl": "bazel/grpc_deps.bzl",
             "//third_party/systemlibs:grpc.bazel.grpc_extra_deps.bzl": "bazel/grpc_extra_deps.bzl",
@@ -468,7 +498,7 @@ def _tf_repositories():
     # Intel openMP that is part of LLVM sources.
     tf_http_archive(
         name = "llvm_openmp",
-        build_file = "//third_party/llvm_openmp:BUILD",
+        build_file = "//third_party/llvm_openmp:BUILD.bazel",
         patch_file = ["//third_party/llvm_openmp:openmp_switch_default_patch.patch"],
         sha256 = "d19f728c8e04fb1e94566c8d76aef50ec926cd2f95ef3bf1e0a5de4909b28b44",
         strip_prefix = "openmp-10.0.1.src",
@@ -524,14 +554,14 @@ def _tf_repositories():
         name = "nccl_archive",
         build_file = "//third_party:nccl/archive.BUILD",
         patch_file = ["//third_party/nccl:archive.patch"],
-        sha256 = "6b946b70a9d2d01871842cbd15ec56488d358abe9a0f3767e372fddc3e241ba7",
-        strip_prefix = "nccl-2.23.4-1",
-        urls = tf_mirror_urls("https://github.com/nvidia/nccl/archive/v2.23.4-1.tar.gz"),
+        sha256 = "7b154ad1f8ccafa795ed6696507d402b1b4ccac944c5fceb7f4e29b19a39cc47",
+        strip_prefix = "nccl-2.25.1-1",
+        urls = tf_mirror_urls("https://github.com/nvidia/nccl/archive/v2.25.1-1.tar.gz"),
     )
 
     tf_http_archive(
         name = "nvtx_archive",
-        build_file = "//third_party:nvtx/BUILD",
+        build_file = "//third_party:nvtx/BUILD.bazel",
         sha256 = "e4438f921fb88a564b0b92791c1c1fdd0f388901213e6a31fdd0dc3803fb9764",
         strip_prefix = "NVTX-bf31d7859ab3130cbf1ef77c33d18d0ebb8c8d08/c/include",
         urls = tf_mirror_urls("https://github.com/NVIDIA/NVTX/archive/bf31d7859ab3130cbf1ef77c33d18d0ebb8c8d08.tar.gz"),
@@ -612,16 +642,6 @@ def _tf_repositories():
         sha256 = "b844b75c25cfe7ea34b832b369ab91234009b2dfe2ae1fcea53860c57253fe2e",
         strip_prefix = "pprof-83db2b799d1f74c40857232cb5eb4c60379fe6c2",
         urls = tf_mirror_urls("https://github.com/google/pprof/archive/83db2b799d1f74c40857232cb5eb4c60379fe6c2.tar.gz"),
-    )
-
-    # The CUDA 11 toolkit ships with CUB.  We should be able to delete this rule
-    # once TF drops support for CUDA 10.
-    tf_http_archive(
-        name = "cub_archive",
-        build_file = "//third_party:cub.BUILD",
-        sha256 = "162514b3cc264ac89d91898b58450190b8192e2af1142cf8ccac2d59aa160dda",
-        strip_prefix = "cub-1.9.9",
-        urls = tf_mirror_urls("https://github.com/NVlabs/cub/archive/1.9.9.zip"),
     )
 
     tf_http_archive(
@@ -733,22 +753,22 @@ def _tf_repositories():
     # https://github.com/bazelbuild/rules_apple/releases
     tf_http_archive(
         name = "build_bazel_rules_apple",
-        sha256 = "a6141240657093fa7ccc7ca1ee5a62408dd9996d1bf47bc2369b8b9faefb2698",
-        urls = tf_mirror_urls("https://github.com/bazelbuild/rules_apple/releases/download/2.3.0/rules_apple.2.3.0.tar.gz"),
+        sha256 = "b4df908ec14868369021182ab191dbd1f40830c9b300650d5dc389e0b9266c8d",
+        urls = tf_mirror_urls("https://github.com/bazelbuild/rules_apple/releases/download/3.5.1/rules_apple.3.5.1.tar.gz"),
     )
 
     # https://github.com/bazelbuild/rules_swift/releases
     tf_http_archive(
         name = "build_bazel_rules_swift",
-        sha256 = "32f95dbe6a88eb298aaa790f05065434f32a662c65ec0a6aabdaf6881e4f169f",
-        urls = tf_mirror_urls("https://github.com/bazelbuild/rules_swift/releases/download/1.5.0/rules_swift.1.5.0.tar.gz"),
+        sha256 = "bb01097c7c7a1407f8ad49a1a0b1960655cf823c26ad2782d0b7d15b323838e2",
+        urls = tf_mirror_urls("https://github.com/bazelbuild/rules_swift/releases/download/1.18.0/rules_swift.1.18.0.tar.gz"),
     )
 
     # https://github.com/bazelbuild/apple_support/releases
     tf_http_archive(
         name = "build_bazel_apple_support",
-        sha256 = "9f7bb62c3ae889e0eae8c18458fd8764e2e537687d9a1d85885d6af980e4fc31",
-        urls = tf_mirror_urls("https://github.com/bazelbuild/apple_support/releases/download/1.6.0/apple_support.1.6.0.tar.gz"),
+        sha256 = "d71b02d6df0500f43279e22400db6680024c1c439115c57a9a82e9effe199d7b",
+        urls = tf_mirror_urls("https://github.com/bazelbuild/apple_support/releases/download/1.18.1/apple_support.1.18.1.tar.gz"),
     )
 
     # https://github.com/apple/swift-protobuf/releases
@@ -903,6 +923,13 @@ def _tf_repositories():
         sha256 = "2eb48f87c099a95123dc13a9f243bd3b74d67fe1d887942903d09a211593da97",
         strip_prefix = "highway-1.0.7",
         urls = tf_mirror_urls("https://github.com/google/highway/archive/refs/tags/1.0.7.zip"),
+    )
+
+    tf_http_archive(
+        name = "org_xprof",
+        sha256 = "ff84f44bf87b2805fd6badc398b1889049f1d86d2478ecc466680c6939261afe",
+        strip_prefix = "xprof-05e9e316c9cf8de6dd5fdcd8c841723fc1e8a20f",
+        urls = tf_mirror_urls("https://github.com/openxla/xprof/archive/05e9e316c9cf8de6dd5fdcd8c841723fc1e8a20f.zip"),
     )
 
     # used for adding androidx.annotation dependencies in tflite android jni.

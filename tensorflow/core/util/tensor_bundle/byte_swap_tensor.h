@@ -16,6 +16,7 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_UTIL_TENSOR_BUNDLE_BYTE_SWAP_TENSOR_H_
 #define TENSORFLOW_CORE_UTIL_TENSOR_BUNDLE_BYTE_SWAP_TENSOR_H_
 
+#include "absl/status/status.h"
 #include "tensorflow/core/framework/node_def.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/platform/byte_order.h"
@@ -35,6 +36,13 @@ bool IsByteSwappable(DataType dtype);
 // Returns: OkStatus() on success, -1 otherwise
 // TODO(frreiss): Should this be a member of the Tensor class?
 absl::Status ByteSwapTensor(Tensor* t);
+
+// Byte-swap a tensor proto's backing buffer in place.
+//
+// Args:
+//  t: TensorProto to be modified IN PLACE.
+// Returns: OkStatus() on success, -1 otherwise
+absl::Status ByteSwapTensorProto(TensorProto* tp);
 
 // Swap tensor_content field of Const Op Tensors in the named functions
 // in NodeDef

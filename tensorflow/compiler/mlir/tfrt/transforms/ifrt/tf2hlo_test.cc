@@ -118,17 +118,18 @@ TEST_F(Tf2HloTest, Empty) {
       GetCompileMetadata(mlir_module.get(), *client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, {}));
 
-  xla::CpuTopologyDescription cpu_topology =
-      xla::CpuTopologyDescription::Create(
-          xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
-          /*devices=*/std::vector<std::unique_ptr<xla::PjRtDevice>>{},
-          /*machine_attributes=*/std::vector<std::string>{});
+  const xla::CpuTopologyDescription cpu_topology(
+      xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
+      /*cpu_devices=*/{},
+      /*machine_attributes=*/std::vector<std::string>{});
   std::shared_ptr<xla::CpuTopologyDescription> cpu_topology_ptr =
       std::make_shared<xla::CpuTopologyDescription>(cpu_topology);
 
+  std::vector<int> variable_arg_indices;
   Tf2HloArg arg{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = {},
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -166,17 +167,19 @@ TEST_F(Tf2HloTest, Tuple) {
       GetCompileMetadata(mlir_module.get(), *client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, dtype_and_shapes));
 
-  xla::CpuTopologyDescription cpu_topology =
-      xla::CpuTopologyDescription::Create(
-          xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
-          /*devices=*/std::vector<std::unique_ptr<xla::PjRtDevice>>{},
-          /*machine_attributes=*/std::vector<std::string>{});
+  const xla::CpuTopologyDescription cpu_topology(
+      xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
+      /*cpu_devices=*/{},
+      /*machine_attributes=*/std::vector<std::string>{});
   std::shared_ptr<xla::CpuTopologyDescription> cpu_topology_ptr =
       std::make_shared<xla::CpuTopologyDescription>(cpu_topology);
+
+  std::vector<int> variable_arg_indices;
 
   Tf2HloArg arg{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -214,17 +217,18 @@ TEST_F(Tf2HloTest, Spmd) {
       GetCompileMetadata(mlir_module.get(), *client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, dtype_and_shapes));
 
-  xla::CpuTopologyDescription cpu_topology =
-      xla::CpuTopologyDescription::Create(
-          xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
-          /*devices=*/std::vector<std::unique_ptr<xla::PjRtDevice>>{},
-          /*machine_attributes=*/std::vector<std::string>{});
+  const xla::CpuTopologyDescription cpu_topology(
+      xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
+      /*cpu_devices=*/{},
+      /*machine_attributes=*/std::vector<std::string>{});
   std::shared_ptr<xla::CpuTopologyDescription> cpu_topology_ptr =
       std::make_shared<xla::CpuTopologyDescription>(cpu_topology);
 
+  std::vector<int> variable_arg_indices;
   Tf2HloArg arg{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -300,17 +304,18 @@ TEST_F(Tf2HloTest, UsingDefaultDeviceAssignment) {
       GetCompileMetadata(mlir_module.get(), *client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, dtype_and_shapes));
 
-  xla::CpuTopologyDescription cpu_topology =
-      xla::CpuTopologyDescription::Create(
-          xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
-          /*devices=*/std::vector<std::unique_ptr<xla::PjRtDevice>>{},
-          /*machine_attributes=*/std::vector<std::string>{});
+  const xla::CpuTopologyDescription cpu_topology(
+      xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
+      /*cpu_devices=*/{},
+      /*machine_attributes=*/std::vector<std::string>{});
   std::shared_ptr<xla::CpuTopologyDescription> cpu_topology_ptr =
       std::make_shared<xla::CpuTopologyDescription>(cpu_topology);
 
+  std::vector<int> variable_arg_indices;
   Tf2HloArg arg{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -411,17 +416,18 @@ TEST_F(Tf2HloTest, XlaCallHostCallback) {
       GetCompileMetadata(mlir_module.get(), *client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, dtype_and_shapes));
 
-  xla::CpuTopologyDescription cpu_topology =
-      xla::CpuTopologyDescription::Create(
-          xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
-          /*devices=*/std::vector<std::unique_ptr<xla::PjRtDevice>>{},
-          /*machine_attributes=*/std::vector<std::string>{});
+  const xla::CpuTopologyDescription cpu_topology(
+      xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
+      /*cpu_devices=*/{},
+      /*machine_attributes=*/std::vector<std::string>{});
   std::shared_ptr<xla::CpuTopologyDescription> cpu_topology_ptr =
       std::make_shared<xla::CpuTopologyDescription>(cpu_topology);
 
+  std::vector<int> variable_arg_indices;
   Tf2HloArg arg{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -469,9 +475,11 @@ TEST_F(Tf2HloTest, GpuCompile) {
       GetCompileMetadata(mlir_module.get(), mock_client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, dtype_and_shapes));
 
+  std::vector<int> variable_arg_indices;
   Tf2HloArg arg{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -517,17 +525,18 @@ TEST_F(Tf2HloTest, SameArgProduceSameKeyFingerprint) {
       GetCompileMetadata(mlir_module.get(), *client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, dtype_and_shapes));
 
-  xla::CpuTopologyDescription cpu_topology =
-      xla::CpuTopologyDescription::Create(
-          xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
-          /*devices=*/std::vector<std::unique_ptr<xla::PjRtDevice>>{},
-          /*machine_attributes=*/std::vector<std::string>{});
+  const xla::CpuTopologyDescription cpu_topology(
+      xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
+      /*cpu_devices=*/{},
+      /*machine_attributes=*/std::vector<std::string>{});
   std::shared_ptr<xla::CpuTopologyDescription> cpu_topology_ptr =
       std::make_shared<xla::CpuTopologyDescription>(cpu_topology);
 
+  std::vector<int> variable_arg_indices;
   Tf2HloArg arg0{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -538,6 +547,7 @@ TEST_F(Tf2HloTest, SameArgProduceSameKeyFingerprint) {
   Tf2HloArg arg1{
       .module = mlir_module_clone.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -576,17 +586,18 @@ TEST_F(Tf2HloTest, DifferentCompileMetadataProduceDifferentKeyFingerprint) {
       GetCompileMetadata(mlir_module.get(), *client));
   TF_ASSERT_OK(UpdateCompileMetadata(compile_metadata, dtype_and_shapes));
 
-  xla::CpuTopologyDescription cpu_topology =
-      xla::CpuTopologyDescription::Create(
-          xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
-          /*devices=*/std::vector<std::unique_ptr<xla::PjRtDevice>>{},
-          /*machine_attributes=*/std::vector<std::string>{});
+  const xla::CpuTopologyDescription cpu_topology(
+      xla::CpuId(), xla::CpuName(), /*platform_version=*/"",
+      /*cpu_devices=*/{},
+      /*machine_attributes=*/std::vector<std::string>{});
   std::shared_ptr<xla::CpuTopologyDescription> cpu_topology_ptr =
       std::make_shared<xla::CpuTopologyDescription>(cpu_topology);
 
+  std::vector<int> variable_arg_indices;
   Tf2HloArg arg0{
       .module = mlir_module.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),
@@ -598,6 +609,7 @@ TEST_F(Tf2HloTest, DifferentCompileMetadataProduceDifferentKeyFingerprint) {
   Tf2HloArg arg1{
       .module = mlir_module_clone.get(),
       .input_dtypes_and_shapes = dtype_and_shapes,
+      .variable_arg_indices = variable_arg_indices,
       .entry_function_name = "main",
       .compile_metadata = compile_metadata,
       .shape_representation_fn = tensorflow::IdentityShapeRepresentationFn(),

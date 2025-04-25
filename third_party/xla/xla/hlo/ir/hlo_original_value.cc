@@ -16,11 +16,14 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_original_value.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
+#include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/xla_data.pb.h"
@@ -53,15 +56,14 @@ std::string OriginalValueToStringHelper(const OriginalValue& original_value,
     return result;
   }
 
-  // The original_value may refer to an empty array, such as origin {}, so let's
-  // check whether that's the case before accessing them. Generally speaking the
-  // index _should_ be good, but let's double check.
   const auto& leaf = original_value.element(shape_index);
   if (leaf.has_value()) {
     absl::StrAppend(
         &result, "{", "\"", leaf->instruction_name, "\"",
         (leaf->shape_index.empty() ? "" : " " + leaf->shape_index.ToString()),
         "}");
+  } else {
+    absl::StrAppend(&result, "{}");
   }
   return result;
 }
@@ -87,6 +89,26 @@ OriginalValueProto OriginalValueToProto(const OriginalValue& original_value) {
     }
   }
   return original_value_proto;
+}
+
+void MoveOriginalValue(const HloInstruction* src_instruction,
+                       HloInstruction* dest_instruction) {
+  std::shared_ptr<OriginalValue> original_value =
+      src_instruction->original_value();
+  if (!original_value) {
+    return;
+  }
+
+  // This is not expected to happen in practice.
+  if (!ShapeUtil::Compatible(src_instruction->shape(),
+                             dest_instruction->shape())) {
+    LOG(WARNING)
+        << "Expect the new instruction to have the same shape with the old "
+           "instruction when moving over original_value";
+    return;
+  }
+
+  dest_instruction->set_original_value(original_value);
 }
 
 }  // namespace xla

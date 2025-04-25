@@ -83,8 +83,7 @@ std::optional<bool> FusionCanShareBufferHint(
   bool is_reduction_emitter = analysis.GetEmitterFusionKind() ==
                               HloFusionAnalysis::EmitterFusionKind::kReduction;
   const HloInstruction* reduction_hero =
-      is_reduction_emitter ? reduction_hero = analysis.FindHeroReduction()
-                           : nullptr;
+      is_reduction_emitter ? analysis.FindHeroReduction() : nullptr;
 
   // We need to make sure that the fusion parameter is accessed in the same
   // iteration order as the fusion output. Also, there should not be any other
@@ -133,7 +132,7 @@ std::optional<bool> FusionCanShareBufferHint(
       // the scatter inputs.
       if (hlo == non_bitcast_root && hlo->opcode() == HloOpcode::kScatter) {
         int64_t num_scatter_inputs =
-            hlo->shape().IsTuple() ? hlo->shape().tuple_shapes_size() : 1;
+            hlo->shape().IsTuple() ? hlo->shape().tuple_shapes().size() : 1;
         if (hlo->operand_index(hlo_operand) < num_scatter_inputs &&
             absl::c_count(hlo->operands(), hlo_operand) == 1) {
           continue;

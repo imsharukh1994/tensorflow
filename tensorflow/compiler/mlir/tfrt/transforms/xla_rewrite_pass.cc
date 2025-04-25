@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include <cstdint>
 #include <memory>
 #include <utility>
 
@@ -59,10 +60,8 @@ struct RewriteStatefulPartitionedCallToXlaLaunchOnCpu
 
     for (int i = 0; i < op.getNumOperands(); ++i) {
       auto value = op.getOperand(i);
-      if (value.getType()
-              .cast<mlir::TensorType>()
-              .getElementType()
-              .isa<mlir::tf_type::ResourceType>()) {
+      if (llvm::isa<mlir::tf_type::ResourceType>(
+              llvm::cast<mlir::TensorType>(value.getType()).getElementType())) {
         resources.push_back(i);
       } else if (auto* def = value.getDefiningOp();
                  def && llvm::isa<mlir::TF::ConstOp>(def)) {
@@ -95,8 +94,8 @@ struct TfrtXlaRewritePass
 
     patterns.add<RewriteStatefulPartitionedCallToXlaLaunchOnCpu>(&getContext());
 
-    if (mlir::failed(mlir::applyPatternsAndFoldGreedily(getOperation(),
-                                                        std::move(patterns)))) {
+    if (mlir::failed(
+            mlir::applyPatternsGreedily(getOperation(), std::move(patterns)))) {
       signalPassFailure();
       return;
     }

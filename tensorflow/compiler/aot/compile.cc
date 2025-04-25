@@ -32,17 +32,16 @@ limitations under the License.
 #include "xla/client/client_library.h"
 #include "xla/client/compile_only_client.h"
 #include "xla/hlo/builder/xla_computation.h"
-#include "xla/service/cpu/cpu_compiler.h"
+#include "xla/service/cpu/cpu_aot_compilation_result.h"
 #include "xla/stream_executor/platform_manager.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
 #include "tensorflow/core/framework/graph.pb.h"
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/lib/strings/proto_serialization.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/platform/regexp.h"
+#include "tensorflow/core/platform/regexp.h"  // IWYU pragma: keep
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
@@ -95,7 +94,7 @@ absl::Status CompileXla(xla::CompileOnlyClient* client,
                            aot_or.status().message());
   }
   compile_result->aot =
-      xla::unique_ptr_down_cast<xla::cpu::CpuAotCompilationResult>(
+      xla::unique_ptr_down_cast<xla::cpu::CpuAotCompilationResultLegacy>(
           std::move(aot_or.value().back()));
   compile_result->entry_point = aot_opts.entry_point_name();
   compile_result->pointer_size =
@@ -117,14 +116,11 @@ absl::Status CompileGraph(GraphDef graph_def, const tf2xla::Config& config,
       xla::ClientLibrary::GetOrCreateCompileOnlyClient(cpu_platform).value();
   xla::XlaComputation computation;
 
-  bool use_mlir_hlo_lowering = false;
   bool use_mlir_bridge = false;
   if (!flags.mlir_components.empty() && flags.mlir_components != "None") {
     for (auto component : absl::StrSplit(flags.mlir_components, ',')) {
       if (component == "Bridge") {
         use_mlir_bridge = true;
-      } else if (component == "HloLowering") {
-        use_mlir_hlo_lowering = true;
       } else {
         return errors::Unknown("Unknown mlir_component ", component);
       }
@@ -160,12 +156,16 @@ absl::Status CompileGraph(GraphDef graph_def, const tf2xla::Config& config,
       flags.target_triple, flags.target_cpu, flags.target_features,
       flags.entry_point,
       xla::cpu::CpuAotCompilationOptions::RelocationModel::BigPic);
-  aot_opts.set_use_mlir_hlo_lowering(use_mlir_hlo_lowering);
 
   if (flags.sanitize_dataflow) {
     aot_opts.set_sanitize_dataflow(flags.sanitize_dataflow);
     aot_opts.set_sanitize_abilists_dataflow(absl::StrSplit(
         flags.sanitize_abilists_dataflow, ',', absl::SkipEmpty()));
+  }
+
+  // AOT compilation is currently not supported for the thunk runtime.
+  if (aot_opts.debug_options().xla_cpu_use_thunk_runtime()) {
+    aot_opts.mutable_debug_options()->set_xla_cpu_use_thunk_runtime(false);
   }
 
   return CompileXla(client, computation, aot_opts, compile_result);

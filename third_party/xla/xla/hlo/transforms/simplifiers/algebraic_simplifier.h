@@ -24,6 +24,7 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
@@ -207,8 +208,7 @@ class AlgebraicSimplifierOptions {
     return enable_scalar_multiply_reduction_;
   }
 
-  // Also the algebraic simplifer to treat floating point values like real
-  // numbers.
+  // Set the algebraic simplifier to treat floats as real numbers.
   void set_enable_floats_are_real(bool enable_floats_are_real) {
     enable_floats_are_real_ = enable_floats_are_real;
   }
@@ -322,6 +322,30 @@ class AlgebraicSimplifierOptions {
     return enable_broadcast_degenerate_dimension_;
   }
 
+  void set_enable_remove_no_op_reduce_precision(
+      bool enable_remove_no_op_reduce_precision) {
+    enable_remove_no_op_reduce_precision_ =
+        enable_remove_no_op_reduce_precision;
+  }
+
+  bool enable_remove_no_op_reduce_precision() const {
+    return enable_remove_no_op_reduce_precision_;
+  }
+
+  bool enable_onednn_support() const { return enable_onednn_support_; }
+
+  void set_enable_onednn_support(bool enable_onednn_support) {
+    enable_onednn_support_ = enable_onednn_support;
+  }
+
+  bool rewrite_reshape_transpose_as_slice_concatenate() const {
+    return rewrite_reshape_transpose_as_slice_concatenate_;
+  }
+
+  void set_rewrite_reshape_transpose_as_slice_concatenate(bool value) {
+    rewrite_reshape_transpose_as_slice_concatenate_ = value;
+  }
+
  private:
   // Metadata struct can be used to store any metadata information encapsulated
   // with the AlgebraicSimplifierOptions that can be later used in an
@@ -364,6 +388,20 @@ class AlgebraicSimplifierOptions {
   bool disable_dynamic_slice_to_slice_conversion_{false};
   bool enable_fast_math_{false};
   bool enable_broadcast_degenerate_dimension_{true};
+  bool enable_remove_no_op_reduce_precision_{false};
+  bool enable_onednn_support_{
+#ifdef INTEL_MKL
+      // Deprecation warning: This config-dependent default value is a temporary
+      // measure to preserve existing behavior until downstream users can update
+      // their code. The option will default to `false` in a future version;
+      // please explicitly call `set_enable_onednn_support(true)` if you depend
+      // on it being `true`.
+      true
+#else   // INTEL_MKL
+      false
+#endif  // INTEL_MKL
+  };
+  bool rewrite_reshape_transpose_as_slice_concatenate_{true};
   Metadata metadata_;
 };
 
@@ -484,6 +522,8 @@ class AlgebraicSimplifierVisitor : public DfsHloRewriteVisitor {
 
   absl::Status HandleReduce(HloInstruction* hlo) override;
 
+  absl::Status HandleReducePrecision(HloInstruction* hlo) override;
+
   absl::Status HandleReduceWindow(HloInstruction* hlo) override;
 
   absl::Status HandleReverse(HloInstruction* reverse) override;
@@ -557,7 +597,8 @@ class AlgebraicSimplifierVisitor : public DfsHloRewriteVisitor {
 
  private:
   // Returns whether the dot precision config is supported by simplifier.
-  virtual bool SupportedDotPrecisionConfig(const PrecisionConfig& config);
+  virtual bool SupportedDotPrecisionConfig(const PrecisionConfig& config,
+                                           bool has_contracting_dim);
 
   // Makes algorithm specific set of instructions for multiply with precision
   // algorithm in mind. In the trivial case it returns just multiply.
@@ -671,9 +712,10 @@ class AlgebraicSimplifierVisitor : public DfsHloRewriteVisitor {
   // Same as above but takes shape arguments directly.
   bool SameShape(const Shape& lhs, const Shape& rhs) const;
 
-  // A Broadcast that feeds an element-wise operation with a unique non-scalar
-  // operand can sink to after the operation.
-  absl::StatusOr<bool> TryToSinkBroadcastAfterOpWithUniqueNonScalarOperand(
+  // Attempts to sink broadcasts to after element-wise operations if all
+  // operands of that element-wise operation are compatible broadcasts. Returns
+  // whether a change was made.
+  absl::StatusOr<bool> TryToSinkBroadcastAfterElementwiseOps(
       HloInstruction* broadcast);
 
   absl::StatusOr<HloInstruction*> OptimizeDotOfConcat(HloInstruction* dot);
@@ -720,7 +762,8 @@ class AlgebraicSimplifierVisitor : public DfsHloRewriteVisitor {
 
   // Checks if the given convolution is in BF16 and is oneDNN rewritable, if not
   // then it promotes the data type of the convolution to F32
-  absl::StatusOr<bool> IsOneDnnRewritableBF16Conv(HloInstruction** convolution);
+  absl::StatusOr<bool> PromoteConvolutionToF32IfNotOnednnCompatible(
+      HloInstruction** convolution);
 
   // Tries to use a kDot in place of the given convolution.
   absl::StatusOr<bool> SimplifyConvToDot(HloInstruction* convolution);
@@ -750,7 +793,7 @@ class AlgebraicSimplifierVisitor : public DfsHloRewriteVisitor {
   absl::StatusOr<bool> TrySimplifyTautologicalCompare(
       HloInstruction* conjunction);
 
-  // Tries to simlplify (bitcast-convert (concat (bitcast-convert A) ...)) where
+  // Tries to simplify (bitcast-convert (concat (bitcast-convert A) ...)) where
   // the types of inner and outer bitcast-convert cancel out.
   absl::StatusOr<bool> TrySimplifyTautologicalBitcastConvert(
       HloInstruction* bitcast);
@@ -768,6 +811,13 @@ class AlgebraicSimplifierVisitor : public DfsHloRewriteVisitor {
 
   // Useful when we want to use the same visitor over multiple computations.
   void ResetState(HloComputation* computation);
+
+  // For cases where the stride won't end up being used, we update the limit
+  // and reset the stride to 1. Returns true if the stride is redundant (and the
+  // slice instruction is replaced).
+  // - For example in slices=([0:X:X]), where X == dimension
+  absl::StatusOr<bool> RemoveRedundantStride(
+      absl::Nonnull<HloInstruction*> slice);
 
   // Current HloComputation instance the AlgebraicSimplifierVisitor is
   // traversing.

@@ -27,6 +27,7 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "grpcpp/channel.h"
@@ -116,6 +117,9 @@ class DistributedRuntimeClient {
   virtual absl::StatusOr<std::string> BlockingKeyValueGet(
       absl::string_view key, absl::Duration timeout) = 0;
 
+  // Returns `NotFoundError` immediately if the key is not found.
+  virtual absl::StatusOr<std::string> KeyValueTryGet(absl::string_view key) = 0;
+
   // Get all key-value pairs under a directory (key).
   // A value is considered to be in the directory if its key is prefixed with
   // the directory.
@@ -140,6 +144,11 @@ class DistributedRuntimeClient {
   virtual absl::Status WaitAtBarrier(
       std::string barrier_id, absl::Duration timeout,
       std::optional<absl::Span<const int32_t>> nodes) = 0;
+
+  // Returns the subset of live nodes. See CoordinationService.GetAliveTasks for
+  // detailed semantics.
+  virtual absl::StatusOr<std::vector<int32_t>> GetLiveNodes(
+      absl::Span<const int32_t> nodes) = 0;
 
   // Returns pointer to coordination service agent, or InternalError if the
   // client does not use coordination service.

@@ -20,7 +20,10 @@ limitations under the License.
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "xla/layout.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/device_memory_allocator.h"
 #include "xla/stream_executor/platform.h"
@@ -36,7 +39,7 @@ TfAllocatorAdapter::TfAllocatorAdapter(tsl::Allocator *wrapped, Stream *stream)
       stream_(stream) {}
 
 TfAllocatorAdapter::TfAllocatorAdapter(tsl::Allocator *wrapped,
-                                       Platform *platform)
+                                       const Platform *platform)
     : DeviceMemoryAllocator(platform), wrapped_(wrapped), stream_(nullptr) {}
 
 TfAllocatorAdapter::~TfAllocatorAdapter() {}
@@ -51,8 +54,8 @@ absl::StatusOr<OwningDeviceMemory> TfAllocatorAdapter::Allocate(
     data =
         wrapped_->AllocateRaw(tsl::Allocator::kAllocatorAlignment, size, attrs);
     if (data == nullptr) {
-      return absl::ResourceExhaustedError(absl::StrCat(
-          "Out of memory while trying to allocate ", size, " bytes."));
+      return MemoryAllocationError(
+          size, memory_space == xla::Layout::kHostMemorySpace);
     }
   }
   return OwningDeviceMemory(DeviceMemoryBase(data, size), device_ordinal, this);
@@ -81,6 +84,27 @@ absl::StatusOr<tsl::Allocator *> TfAllocatorAdapter::GetAllocator(
                      " not equal to device_ordinal ", device_ordinal));
   }
   return wrapped_;
+}
+
+static constexpr absl::string_view kMemoryAllocationErrorPayloadKey =
+    "tf-allocator-allocation-error";
+
+absl::Status MemoryAllocationError(uint64_t size, bool is_host_mem) {
+  constexpr absl::string_view kHostMemoryExplanation =
+      " Please set the environment variable "
+      "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB to allocate larger "
+      "host memory than the default 64 GB.";
+
+  absl::Status status = absl::ResourceExhaustedError(
+      absl::StrCat("Out of ", (is_host_mem ? "host " : ""),
+                   "memory while trying to allocate ", size, " bytes.",
+                   (is_host_mem ? kHostMemoryExplanation : "")));
+  status.SetPayload(kMemoryAllocationErrorPayloadKey, absl::Cord());
+  return status;
+}
+
+bool IsMemoryAllocationError(absl::Status status) {
+  return status.GetPayload(kMemoryAllocationErrorPayloadKey).has_value();
 }
 
 }  // namespace stream_executor

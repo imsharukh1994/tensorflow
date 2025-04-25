@@ -27,9 +27,8 @@ py_strict_test(
         "//tensorflow/tools/api/golden:api_golden_v2",
         "//third_party/py/numpy/tf_numpy_api:api_golden",
     ],
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = [
+        "DO_NOT_USE_MIGRATION_ONLY_NO_PYTHON_NEXT",
         "no_mac",  # b/198669105
         "no_oss",  # Runs explicitly in OSS
         "no_pip",
@@ -53,8 +52,6 @@ py_strict_test(
 py_strict_test(
     name = "module_test",
     srcs = ["module_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = [
         "no_windows",  # Failing due to missing API symbols.
     ],
@@ -72,5 +69,6 @@ tf_cc_binary(
     deps = [
         "//tensorflow/core:lib",
         "//tensorflow/core:op_gen_lib",
+        "@com_google_absl//absl/status",
     ],
 )

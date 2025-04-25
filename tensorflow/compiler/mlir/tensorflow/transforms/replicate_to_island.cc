@@ -16,11 +16,13 @@ limitations under the License.
 // This pass forms `tf_executor.island` per replica from a single
 // `tf_device.replicate` island.
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 
+#include "absl/strings/str_cat.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Sequence.h"
@@ -92,7 +94,8 @@ LogicalResult GetDeviceOrdinal(const std::optional<DictionaryAttr>& devices,
            << " to be present in 'tf.device.replicate' op";
   }
   llvm::StringRef tpu_device =
-      tpu_replica.cast<ArrayAttr>()[replica_id].cast<StringAttr>().getValue();
+      llvm::cast<StringAttr>(llvm::cast<ArrayAttr>(tpu_replica)[replica_id])
+          .getValue();
   return tensorflow::GetDeviceOrdinalFromDeviceString(op->getLoc(), tpu_device,
                                                       &device_ordinal);
 }
@@ -134,9 +137,9 @@ LogicalResult UpdateRegionReplicateVariantOps(
     // Map aliased devices to explicit devices based on replica.
     if (auto launch = dyn_cast<tf_device::LaunchOp>(op))
       if (auto device_by_replica = devices.value().get(launch.getDevice()))
-        launch->setAttr(
-            kDeviceAttr,
-            device_by_replica.cast<ArrayAttr>()[replica_id].cast<StringAttr>());
+        launch->setAttr(kDeviceAttr,
+                        llvm::cast<StringAttr>(llvm::cast<ArrayAttr>(
+                            device_by_replica)[replica_id]));
 
     return WalkResult::advance();
   });

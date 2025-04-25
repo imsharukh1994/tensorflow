@@ -19,7 +19,6 @@ cc_library(
     srcs = ["clique.cc"],
     hdrs = ["clique.h"],
     deps = [
-        ":clique_id",
         ":communicator",
         ":rank_id",
         "//xla:util",
@@ -31,12 +30,14 @@ cc_library(
 
 cc_library(
     name = "collectives",
+    srcs = ["collectives.cc"],
     hdrs = ["collectives.h"],
     deps = [
         ":clique_id",
         ":clique_key",
         ":communicator",
         ":rank_id",
+        "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
     ],
@@ -50,14 +51,16 @@ cc_library(
         ":collectives",
         "//xla:util",
         "//xla/service:platform_util",
+        "//xla/tsl/platform:statusor",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -65,11 +68,15 @@ cc_library(
     name = "communicator",
     hdrs = ["communicator.h"],
     deps = [
+        ":rank_id",
+        "//xla:util",
         "//xla:xla_data_proto_cc",
         "//xla/service:collective_ops_utils",
         "//xla/stream_executor:device_memory",
+        "//xla/tsl/concurrency:async_value",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
 )
 

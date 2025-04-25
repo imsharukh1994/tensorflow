@@ -19,13 +19,10 @@ limitations under the License.
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <numeric>
 #include <optional>
 #include <string>
 #include <utility>
 
-#include "absl/memory/memory.h"
-#include "absl/strings/string_view.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
@@ -50,6 +47,7 @@ limitations under the License.
 #include "mlir/Support/LogicalResult.h"  // from @llvm-project
 #include "mlir/Transforms/DialectConversion.h"  // from @llvm-project
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
+#include "mlir/Transforms/Inliner.h"  // from @llvm-project
 #include "mlir/Transforms/InliningUtils.h"  // from @llvm-project
 #include "tensorflow/compiler/mlir/lite/quantization/ir/QuantOps.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_ops.h"
@@ -136,7 +134,7 @@ void DecomposeTFOpsPass::ApplyCanonicalization() {
   populateWithGenerated(patterns);
   populateCanonicalizationPatterns(func, patterns);
 
-  (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+  (void)applyPatternsGreedily(func, std::move(patterns));
 }
 
 LogicalResult DecomposeTFOpsPass::RewriteUnregisteredTFOps() {
@@ -239,7 +237,7 @@ LogicalResult DecomposeTFOpsPass::RewriteUnregisteredTFOps() {
     auto new_op = builder.create<CallOp>(
         op->getLoc(), compose_func_type.getResults(),
         SymbolRefAttr::get(builder.getContext(), compose_func.getName()),
-        new_operands);
+        new_operands, /*args_attrs=*/nullptr, /*res_attrs=*/nullptr);
 
     // Replace the use of the old op. This is mapping the results from the
     // target TF ops to the TFR function returns. If the TFR function return is
@@ -285,6 +283,7 @@ LogicalResult DecomposeTFOpsPass::RewriteUnregisteredTFOps() {
 LogicalResult DecomposeTFOpsPass::InlineTFRFuncCalls() {
   // The Inliner will automatically use the registered dialect inliner.
   InlinerInterface inliner(&getContext());
+  InlinerConfig config;
   func::FuncOp func = getOperation();
   SymbolTable table(external_tfr_module_.has_value()
                         ? *external_tfr_module_
@@ -304,7 +303,7 @@ LogicalResult DecomposeTFOpsPass::InlineTFRFuncCalls() {
 
     // Use the inliner to replace all the uses of the call_op by its
     // composition.
-    if (failed(inlineCall(inliner,
+    if (failed(inlineCall(inliner, config.getCloneCallback(),
                           cast<CallOpInterface>(call_op.getOperation()),
                           cast<CallableOpInterface>(callee.getOperation()),
                           callee.getCallableRegion(),

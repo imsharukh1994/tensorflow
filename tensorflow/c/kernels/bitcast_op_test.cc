@@ -19,6 +19,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/inlined_vector.h"
+#include "absl/status/status.h"
 #include "xla/tsl/protobuf/error_codes.pb.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
 #include "tensorflow/core/framework/attr_value_util.h"
@@ -44,7 +45,7 @@ class DummyDevice : public DeviceBase {
 
 void TestBitcastOp(Tensor* input_tensor, DataType out_type,
                    TensorShape expected_shape, error::Code expected_code) {
-  Status status;
+  absl::Status status;
   NodeDef def;
   def.set_op("Bitcast");
   def.set_device(DEVICE_CPU);

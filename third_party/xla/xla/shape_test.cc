@@ -15,12 +15,13 @@ limitations under the License.
 
 #include "xla/shape.h"
 
+#include <gtest/gtest.h>
 #include "absl/hash/hash_testing.h"
+#include "xla/hlo/testlib/test.h"
 #include "xla/layout.h"
 #include "xla/shape_util.h"
-#include "xla/test.h"
+#include "xla/tsl/platform/test_benchmark.h"
 #include "xla/xla_data.pb.h"
-#include "tsl/platform/test_benchmark.h"
 
 namespace xla {
 namespace {
@@ -44,6 +45,16 @@ class ShapeTest : public ::testing::Test {
   const Shape unbounded_ =
       ShapeUtil::MakeShape(F32, {Shape::kUnboundedSize, 784}, {true, false});
 };
+
+// Tests that if the dynamic_dimensions parameter empty in the Shape
+// constructor, it's treated as all dimensions are static.
+TEST(Shape, ArrayCtorTreatsEmptyDynamicDimensionsAsAllStatic) {
+  const Shape shape(F32, {1, 2, 3}, {});
+  EXPECT_TRUE(shape.is_static());
+  EXPECT_TRUE(shape.is_static_dimension(0));
+  EXPECT_TRUE(shape.is_static_dimension(1));
+  EXPECT_TRUE(shape.is_static_dimension(2));
+}
 
 TEST_F(ShapeTest, ShapeToFromProto) {
   for (const Shape& shape :
@@ -97,6 +108,13 @@ TEST_F(ShapeTest, DeleteDimensions) {
   EXPECT_EQ(shape, ShapeUtil::MakeShapeWithDenseLayout(F32, {5, 9}, {0, 1}));
 }
 
+TEST_F(ShapeTest, DeleteDimensionsUnordered) {
+  Shape shape = ShapeUtil::MakeShapeWithDenseLayout(F32, {5, 3, 2, 7, 9},
+                                                    {2, 0, 1, 4, 3});
+  shape.DeleteDimensions({3, 1, 2});
+  EXPECT_EQ(shape, ShapeUtil::MakeShapeWithDenseLayout(F32, {5, 9}, {0, 1}));
+}
+
 TEST_F(ShapeTest, EqualityTest) {
   // Different layouts.
   EXPECT_NE(ShapeUtil::MakeShapeWithDenseLayout(F32, {23, 44}, {1, 0}),
@@ -115,24 +133,24 @@ TEST_F(ShapeTest, EqualityTest) {
             ShapeUtil::MakeShapeWithDenseLayout(F32, {23, 44}, {1, 0}));
 }
 
-TEST_F(ShapeTest, IsInteger) {
-  EXPECT_FALSE(opaque_.IsInteger());
-  EXPECT_FALSE(token_.IsInteger());
-  EXPECT_TRUE(matrix_.IsInteger());
-  EXPECT_FALSE(tuple_.IsInteger());
-  EXPECT_FALSE(nested_tuple_.IsInteger());
+TEST_F(ShapeTest, AreAllLeavesIntegers) {
+  EXPECT_FALSE(opaque_.AreAllLeavesIntegers());
+  EXPECT_FALSE(token_.AreAllLeavesIntegers());
+  EXPECT_TRUE(matrix_.AreAllLeavesIntegers());
+  EXPECT_FALSE(tuple_.AreAllLeavesIntegers());
+  EXPECT_FALSE(nested_tuple_.AreAllLeavesIntegers());
 
   Shape u32_shape = ShapeUtil::MakeShape(U32, {1});
-  EXPECT_TRUE(u32_shape.IsInteger());
+  EXPECT_TRUE(u32_shape.AreAllLeavesIntegers());
 
   Shape f32_shape = ShapeUtil::MakeShape(F32, {1});
-  EXPECT_FALSE(f32_shape.IsInteger());
+  EXPECT_FALSE(f32_shape.AreAllLeavesIntegers());
 
   Shape integer_tuple = ShapeUtil::MakeTupleShape({u32_shape, u32_shape});
-  EXPECT_TRUE(integer_tuple.IsInteger());
+  EXPECT_TRUE(integer_tuple.AreAllLeavesIntegers());
 
   Shape mixed_type_tuple = ShapeUtil::MakeTupleShape({u32_shape, f32_shape});
-  EXPECT_FALSE(mixed_type_tuple.IsInteger());
+  EXPECT_FALSE(mixed_type_tuple.AreAllLeavesIntegers());
 }
 
 TEST_F(ShapeTest, IsStatic) {
@@ -172,7 +190,7 @@ TEST_F(ShapeTest, IsDynamic) {
       ->set_dynamic_dimension(1, true);
   EXPECT_FALSE(unbounded_tuple.is_unbounded_dynamic());
   ShapeUtil::GetMutableSubshape(&unbounded_tuple, {2})
-      ->set_dimensions(1, Shape::kUnboundedSize);
+      ->set_dimensions(1, Shape::kUnboundedSize, /*is_dynamic=*/true);
   EXPECT_TRUE(unbounded_tuple.is_unbounded_dynamic());
 }
 
@@ -203,20 +221,17 @@ TEST_F(ShapeTest, IsStaticDimension) {
 
 TEST_F(ShapeTest, ProgramShapeToFromProto) {
   ProgramShape program_shape;
-  *program_shape.add_parameters() = ShapeUtil::MakeShape(F32, {1, 2, 3});
-  *program_shape.add_parameters() = ShapeUtil::MakeTokenShape();
-  *program_shape.add_parameters() = ShapeUtil::MakeShape(S64, {});
-  *program_shape.add_parameters() = ShapeUtil::MakeTupleShape(
-      {ShapeUtil::MakeShape(S32, {}),
-       ShapeUtil::MakeTupleShape({ShapeUtil::MakeTokenShape()}),
-       ShapeUtil::MakeShape(F32, {42, 42})});
+  program_shape.AddParameter(ShapeUtil::MakeShape(F32, {1, 2, 3}), "foo");
+  program_shape.AddParameter(ShapeUtil::MakeTokenShape(), "bar");
+  program_shape.AddParameter(ShapeUtil::MakeShape(S64, {}), "baz");
+  program_shape.AddParameter(
+      ShapeUtil::MakeTupleShape(
+          {ShapeUtil::MakeShape(S32, {}),
+           ShapeUtil::MakeTupleShape({ShapeUtil::MakeTokenShape()}),
+           ShapeUtil::MakeShape(F32, {42, 42})}),
+      "qux qux");
 
   *program_shape.mutable_result() = ShapeUtil::MakeShape(F32, {7});
-
-  program_shape.add_parameter_names("foo");
-  program_shape.add_parameter_names("bar");
-  program_shape.add_parameter_names("baz");
-  program_shape.add_parameter_names("qux qux");
 
   // Create a copy of the program shape by round-tripping through a proto.
   ProgramShape program_shape_copy(program_shape.ToProto());
@@ -230,9 +245,9 @@ TEST_F(ShapeTest, ProgramShapeToFromProto) {
   EXPECT_TRUE(
       ShapeUtil::Equal(program_shape.result(), program_shape_copy.result()));
 
-  ASSERT_EQ(program_shape.parameter_names_size(),
-            program_shape_copy.parameter_names_size());
-  for (int i = 0; i < program_shape.parameter_names_size(); ++i) {
+  ASSERT_EQ(program_shape.parameters_size(),
+            program_shape_copy.parameters_size());
+  for (int i = 0; i < program_shape.parameters_size(); ++i) {
     EXPECT_EQ(program_shape.parameter_names(i),
               program_shape_copy.parameter_names(i));
   }
@@ -253,12 +268,12 @@ TEST_F(ShapeTest, ProgramShapeToString) {
       "((opaque[], f32[], u32[1,2], s32[3,4]), u32[1,2], token[])",
       prog.ToString());
 
-  prog.add_parameter_names("arg0");
-  prog.add_parameter_names("scalar");
-  prog.add_parameter_names("matrix");
-  prog.add_parameter_names("matrix2");
-  prog.add_parameter_names("tuple");
-  prog.add_parameter_names("nested_tuple");
+  prog.set_parameter_names(0, "arg0");
+  prog.set_parameter_names(1, "scalar");
+  prog.set_parameter_names(2, "matrix");
+  prog.set_parameter_names(3, "matrix2");
+  prog.set_parameter_names(4, "tuple");
+  prog.set_parameter_names(5, "nested_tuple");
   EXPECT_EQ(
       "(arg0: opaque[], "
       "scalar: f32[], "
@@ -297,13 +312,13 @@ void BM_ShapeCopy(::testing::benchmark::State& state) {
     }
     case 1: {
       // f32[1,2,2]{2,1,0}
-      shape = Shape(F32, {1, 2, 2}, {false, false, false}, {});
+      shape = Shape(F32, {1, 2, 2}, {false, false, false});
       *shape.mutable_layout() = Layout({2, 1, 0});
       break;
     }
     case 2: {
       // f32[1,2,2]{2,1,0:T(2,128)}
-      shape = Shape(F32, {1, 2, 2}, {false, false, false}, {});
+      shape = Shape(F32, {1, 2, 2}, {false, false, false});
       *shape.mutable_layout() = Layout({2, 1, 0}, {}, {}, {}, {Tile({2, 128})});
       break;
     }

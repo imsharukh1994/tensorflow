@@ -120,7 +120,7 @@ tf_cc_test(
         "//tensorflow/core:test_main",
         "//tensorflow/core:testlib",
         "@com_google_googletest//:gtest",
-        "@local_tsl//tsl/platform:status_matchers",
+        "@local_xla//xla/tsl/platform:status_matchers",
         "@local_xla//xla/tsl/protobuf:error_codes_proto_impl_cc",
     ],
 )
@@ -148,6 +148,8 @@ cc_library(
         "//tensorflow/core:testlib",
         "//tensorflow/core/framework:tensor_testutil",
         "//tensorflow/core/kernels:function_ops",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@eigen_archive//:eigen3",
@@ -197,7 +199,7 @@ tf_cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
-        "@local_tsl//tsl/platform:status_matchers",
+        "@local_xla//xla/tsl/platform:status_matchers",
         "@local_xla//xla/tsl/protobuf:error_codes_proto_impl_cc",
         "@local_xla//xla/tsl/util:determinism_test_util",
     ],
@@ -218,10 +220,10 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
-        "@local_tsl//tsl/platform:env",
-        "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:refcount",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:env",
+        "@local_xla//xla/tsl/platform:errors",
+        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -238,8 +240,8 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
-        "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:errors",
+        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -281,7 +283,8 @@ tf_cc_test(
         "//tensorflow/core:test_main",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
+        "@com_google_googletest//:gtest",
+        "@local_xla//xla/tsl/platform:test_main",
         "@local_xla//xla/tsl/protobuf:error_codes_proto_impl_cc",
     ],
 )
@@ -298,7 +301,7 @@ cc_library(
         "//tensorflow/core/platform:status",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/container:flat_hash_set",
-        "@local_tsl//tsl/platform:logging",
+        "@local_xla//xla/tsl/platform:logging",
     ],
 )
 
@@ -497,7 +500,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -523,7 +526,7 @@ tf_cc_test(
         "//tensorflow/core/platform:str_util",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:statusor",
         "@local_xla//xla/tsl/protobuf:error_codes_proto_impl_cc",
     ],
 )
@@ -540,11 +543,11 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:mutex",
         "@local_tsl//tsl/platform:thread_annotations",
-        "@local_tsl//tsl/platform:types",
+        "@local_xla//xla/tsl/platform:errors",
+        "@local_xla//xla/tsl/platform:logging",
+        "@local_xla//xla/tsl/platform:types",
     ],
 )
 
@@ -584,9 +587,9 @@ cc_library(
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
-        "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:errors",
+        "@local_xla//xla/tsl/platform:status",
+        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -626,11 +629,11 @@ cc_library(
         "//tensorflow/core:session_options",
         "//tensorflow/core/framework:graph_proto_cc",
         "@com_google_absl//absl/memory",
-        "@local_tsl//tsl/platform:env",
-        "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:refcount",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:env",
+        "@local_xla//xla/tsl/platform:errors",
+        "@local_xla//xla/tsl/platform:status",
+        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -646,10 +649,10 @@ tf_cc_test(
         "//tensorflow/core:test_main",
         "//tensorflow/core/data/service:common_proto_cc",
         "//tensorflow/core/data/service:test_util",
-        "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:status_matchers",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:errors",
+        "@local_xla//xla/tsl/platform:status",
+        "@local_xla//xla/tsl/platform:status_matchers",
+        "@local_xla//xla/tsl/platform:statusor",
         "@local_xla//xla/tsl/protobuf:protos_all_cc",
     ] + tf_protos_all(),
 )
@@ -660,6 +663,7 @@ tf_cc_test(
     # copybara:uncomment extra_copts = ["-Wthread-safety-analysis"],
     deps = [
         ":standalone",
+        "//tensorflow/core:framework",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
     ] + tf_protos_all(),
@@ -688,8 +692,8 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/framework:function_proto_cc",
         "//tensorflow/core/public:version",
-        "@local_tsl//tsl/platform:env",
-        "@local_tsl//tsl/platform:statusor",
+        "@local_xla//xla/tsl/platform:env",
+        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 

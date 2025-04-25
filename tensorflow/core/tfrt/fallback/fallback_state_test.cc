@@ -19,13 +19,16 @@ limitations under the License.
 #include <variant>
 #include <vector>
 
+#include <gmock/gmock.h>
 #include "absl/base/nullability.h"
 #include "tensorflow/cc/framework/ops.h"
 #include "tensorflow/cc/framework/scope.h"
 #include "tensorflow/cc/ops/const_op.h"
 #include "xla/tsl/lib/core/status_test_util.h"
+#include "xla/tsl/protobuf/error_codes.pb.h"
 #include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/framework/device_factory.h"
+#include "tensorflow/core/framework/function.pb.h"
 #include "tensorflow/core/platform/status_matchers.h"
 #include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/protobuf/error_codes.pb.h"
@@ -46,7 +49,7 @@ TEST(FallbackStateTest, CreateWithCpuDeviceVector) {
       session_options, "/job:localhost/replica:0/task:0", &devices));
 
   std::variant<std::vector<std::unique_ptr<Device>>,
-               absl::Nonnull<DynamicDeviceMgr*>>
+               DynamicDeviceMgr* absl_nonnull>
       device_variant = std::move(devices);
 
   auto fallback_state = std::make_unique<tfrt_stub::FallbackState>(
@@ -67,7 +70,7 @@ TEST(FallbackStateTest, CreateWithDynamicDeviceMgr) {
   auto static_device_mgr =
       std::make_unique<DynamicDeviceMgr>(std::move(devices));
 
-  absl::Nonnull<DynamicDeviceMgr*> device_mgr_ptr(static_device_mgr.get());
+  DynamicDeviceMgr* absl_nonnull device_mgr_ptr(static_device_mgr.get());
 
   auto fallback_state = std::make_unique<tfrt_stub::FallbackState>(
       session_options, device_mgr_ptr, fdef_lib);

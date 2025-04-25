@@ -16,17 +16,7 @@ package(
 package_group(
     name = "internal",
     packages = [
-        "//tensorflow/compiler/mlir/...",
-    ],
-)
-
-package_group(
-    name = "friends",
-    includes = [
-        ":internal",
-    ],
-    packages = [
-        "//third_party/iree/...",
+        "//tensorflow/compiler/mlir/tosa/...",
     ],
 )
 
@@ -41,6 +31,7 @@ filegroup(
 gentbl_cc_library(
     name = "tosa_passes_inc_gen",
     compatible_with = get_compatible_with_portable(),
+    tags = ["tf_tosa"],
     tbl_outs = [
         (
             [
@@ -64,6 +55,7 @@ cc_library(
         "transforms/passes.h.inc",
     ],
     compatible_with = get_compatible_with_portable(),
+    tags = ["tf_tosa"],
     deps = [
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
@@ -82,6 +74,7 @@ cc_library(
         "transforms/legalize_utils.h",
     ],
     compatible_with = get_compatible_with_portable(),
+    tags = ["tf_tosa"],
     deps = [
         "//tensorflow/compiler/mlir/lite:tensorflow_lite",
         "//tensorflow/compiler/mlir/lite/kernels/internal:common",
@@ -90,6 +83,8 @@ cc_library(
         "//tensorflow/compiler/mlir/tensorflow:dynamic_shape_utils",
         "//tensorflow/core:framework",
         "//tensorflow/core/kernels:conv_grad_shape_utils",
+        "//tensorflow/lite/kernels/internal:reference_base",
+        "@com_google_absl//absl/status",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:ArithDialect",
         "@llvm-project//mlir:ArithUtils",
@@ -104,6 +99,7 @@ cc_library(
         "@llvm-project//mlir:TosaDialect",
         "@llvm-project//mlir:TransformUtils",
         "@llvm-project//mlir:Transforms",
+        "@gemmlowp",
         "@local_xla//xla/tsl/framework/fixedpoint",
     ],
 )
@@ -111,6 +107,7 @@ cc_library(
 gentbl_cc_library(
     name = "tosa_legalize_tf_inc_gen",
     compatible_with = get_compatible_with_portable(),
+    tags = ["tf_tosa"],
     tbl_outs = [
         (
             ["-gen-rewriters"],
@@ -141,7 +138,7 @@ cc_library(
         "transforms/passes.h",
     ],
     compatible_with = get_compatible_with_portable(),
-    visibility = [":friends"],
+    tags = ["tf_tosa"],
     deps = [
         ":legalize_common",
         ":passes_header",
@@ -166,6 +163,7 @@ cc_library(
 gentbl_cc_library(
     name = "tosa_legalize_tfl_inc_gen",
     compatible_with = get_compatible_with_portable(),
+    tags = ["tf_tosa"],
     tbl_outs = [
         (
             ["-gen-rewriters"],
@@ -202,7 +200,7 @@ cc_library(
         "transforms/passes.h",
     ],
     compatible_with = get_compatible_with_portable(),
-    visibility = [":friends"],
+    tags = ["tf_tosa"],
     deps = [
         ":legalize_common",
         ":passes_header",
@@ -237,7 +235,7 @@ cc_library(
         "transforms/passes.h",
     ],
     compatible_with = get_compatible_with_portable(),
-    visibility = [":friends"],
+    tags = ["tf_tosa"],
     deps = [
         ":legalize_common",
         ":passes_header",

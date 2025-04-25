@@ -27,13 +27,13 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
+#include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/service/cpu/cpu_compiler.h"
 #include "xla/service/cpu/tests/cpu_codegen_test.h"
 #include "xla/shape_util.h"
-#include "xla/tests/hlo_test_base.h"
+#include "xla/tsl/platform/test.h"
 #include "xla/xla.pb.h"
 #include "xla/xla_data.pb.h"
-#include "tsl/platform/test.h"
 
 namespace xla {
 namespace cpu {
@@ -85,7 +85,8 @@ class CpuUnaryIntrinsicTest
 
  private:
   DebugOptions GetDebugOptionsForTest() const override {
-    DebugOptions debug_options = HloTestBase::GetDebugOptionsForTest();
+    DebugOptions debug_options =
+        HloHardwareIndependentTestBase::GetDebugOptionsForTest();
     HloTestBase::SetAotFastMathDebugOptions(&debug_options);
     return debug_options;
   }
@@ -123,6 +124,10 @@ TEST_P(CpuUnaryIntrinsicTest, DoIt) {
   hlo_module->AddEntryComputation(std::move(computation));
 
   std::string check_lines{spec.check_lines.data(), spec.check_lines.size()};
+
+  hlo_module->mutable_config()
+      .mutable_debug_options()
+      .set_xla_cpu_use_thunk_runtime(false);
 
   CompileAheadOfTimeAndVerifyIr(std::move(hlo_module), options, check_lines,
                                 /*match_optimized_ir=*/true);

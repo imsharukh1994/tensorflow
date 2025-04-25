@@ -23,15 +23,14 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/quantization/stablehlo/quantization_config.pb.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/cc/run_passes.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/quantization_options.pb.h"
-#include "tsl/platform/errors.h"
+#include "xla/tsl/platform/errors.h"
 
 namespace mlir::quant::stablehlo {
 
 using ::stablehlo::quantization::QuantizationConfig;
 using ::tensorflow::quantization::RunPasses;
 
-PreCalibrationComponent::PreCalibrationComponent(
-    absl::Nonnull<MLIRContext*> ctx)
+PreCalibrationComponent::PreCalibrationComponent(MLIRContext* absl_nonnull ctx)
     : ctx_(ABSL_DIE_IF_NULL(ctx)) {}  // Crash OK
 
 absl::StatusOr<ModuleOp> PreCalibrationComponent::Run(

@@ -21,6 +21,8 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/logging.h"  // IWYU pragma: keep
 #include "tensorflow/core/framework/attr_value.pb.h"
 #include "tensorflow/core/framework/function.pb.h"
 #include "tensorflow/core/framework/graph.pb.h"
@@ -31,8 +33,6 @@ limitations under the License.
 #include "tensorflow/core/platform/status.h"
 #include "tensorflow/core/protobuf/meta_graph.pb.h"
 #include "tensorflow/core/util/tensor_bundle/byte_swap_array.h"
-#include "tsl/platform/errors.h"
-#include "tsl/platform/logging.h"  // IWYU pragma: keep
 #include "tsl/platform/mem.h"
 
 namespace tensorflow {
@@ -159,6 +159,14 @@ absl::Status ByteSwapTensor(Tensor* t) {
   char* buff = const_cast<char*>((t->tensor_data().data()));
   return ByteSwapBuffer(buff, t->tensor_data().size(), t->dtype(),
                         t->NumElements());
+}
+
+absl::Status ByteSwapTensorProto(TensorProto* tp) {
+  std::string content_str = std::string(tp->tensor_content());
+  char* buff = const_cast<char*>(content_str.data());
+  TF_RETURN_IF_ERROR(ByteSwapBuffer(buff, content_str.size(), tp->dtype(), -1));
+  tp->set_tensor_content(content_str);
+  return absl::OkStatus();
 }
 
 absl::Status ByteSwapTensorContentInNode(NodeDef& node) {

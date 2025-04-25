@@ -23,24 +23,20 @@ package_group(
         "//learning/pathways/serving/runtime/...",
         "//learning/pathways/serving/tests/...",
         "//learning/brain/tfrt/ifrt/...",
-        "//learning/brain/tfrt/mlir/mlrt/application/pathways/compiler/...",
+        "//learning/brain/tfrt/tfrt_session/...",
         # Allow visibility from the mlir language server.
         "//learning/brain/mlir/mlir_lsp_server/...",
+        "//learning/infra/mira/experimental/orbax_model/serving/sidecar/...",
         "//smartass/brain/util/...",
     ]),
 )
 
 gentbl_cc_library(
     name = "pass_inc_gen",
-    tbl_outs = [
-        (
-            [
-                "-gen-pass-decls",
-                "-name=TfrtIfrtServing",
-            ],
-            "passes.h.inc",
-        ),
-    ],
+    tbl_outs = {"passes.h.inc": [
+        "-gen-pass-decls",
+        "-name=TfrtIfrtServing",
+    ]},
     tblgen = "@llvm-project//mlir:mlir-tblgen",
     td_file = "passes.td",
     deps = [
@@ -93,10 +89,10 @@ cc_library(
         "//tensorflow/compiler/mlir/tensorflow:device_util",
         "//tensorflow/compiler/mlir/tensorflow:dump_mlir_util",
         "//tensorflow/compiler/mlir/tensorflow:error_util",
-        "//tensorflow/compiler/mlir/tensorflow:export_tf_dialect_op",
         "//tensorflow/compiler/mlir/tensorflow:tensorflow_ops",
         "//tensorflow/compiler/mlir/tensorflow:tensorflow_types",
         "//tensorflow/compiler/mlir/tensorflow:tpu_rewrite_device_util",
+        "//tensorflow/compiler/mlir/tensorflow:translate_utils",
         "//tensorflow/compiler/mlir/tensorflow/ir/host_runtime:tensorflow_tfrt_ops",
         "//tensorflow/compiler/mlir/tensorflow/transforms:tensorflow_passes",
         "//tensorflow/compiler/mlir/tensorflow/transforms/host_runtime:tpu_metadata_utils",
@@ -156,19 +152,17 @@ cc_library(
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:Support",
         "@local_tsl//tsl/platform:fingerprint",
-        "@local_tsl//tsl/platform:statusor",
         "@local_xla//xla:shape_util",
         "@local_xla//xla:xla_data_proto_cc",
         "@local_xla//xla/client:client_library",
-        "@local_xla//xla/client:compile_only_client",
         "@local_xla//xla/hlo/translate/hlo_to_mhlo:hlo_to_mlir_hlo",
         "@local_xla//xla/pjrt:pjrt_compiler",
         "@local_xla//xla/python/ifrt",
         "@local_xla//xla/service:computation_placer_hdr",
         "@local_xla//xla/service:hlo_proto_cc",
         "@local_xla//xla/stream_executor:platform_manager",
-        "@local_xla//xla/tsl/concurrency:ref_count",
     ],
 )
 
@@ -258,9 +252,9 @@ cc_library(
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Support",
-        "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:statusor",
         "@local_tsl//tsl/profiler/lib:traceme",
+        "@local_xla//xla/tsl/platform:errors",
+        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -292,13 +286,13 @@ tf_cc_test(
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Parser",
-        "@local_tsl//tsl/platform:env",
-        "@local_tsl//tsl/platform:status_matchers",
-        "@local_tsl//tsl/platform:statusor",
         "@local_xla//xla/python/ifrt",
         "@local_xla//xla/python/ifrt:test_util",
         "@local_xla//xla/python/pjrt_ifrt:tfrt_cpu_client_test_lib",
         "@local_xla//xla/tsl/framework/test_util:mock_serving_device_selector",
+        "@local_xla//xla/tsl/platform:env",
+        "@local_xla//xla/tsl/platform:status_matchers",
+        "@local_xla//xla/tsl/platform:statusor",
         "@tf_runtime//:hostcontext",
     ],
 )

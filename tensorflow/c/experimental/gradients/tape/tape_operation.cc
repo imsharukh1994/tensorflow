@@ -25,6 +25,7 @@ limitations under the License.
 #include "tensorflow/c/eager/abstract_tensor_handle.h"
 #include "tensorflow/c/eager/gradients.h"
 #include "tensorflow/c/tensor_interface.h"
+#include "xla/tsl/platform/errors.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/types.pb.h"
@@ -34,7 +35,6 @@ limitations under the License.
 #include "tensorflow/core/platform/strcat.h"
 #include "tensorflow/core/platform/stringpiece.h"
 #include "tensorflow/core/platform/types.h"
-#include "tsl/platform/errors.h"
 
 namespace tensorflow {
 namespace gradients {
@@ -84,7 +84,7 @@ absl::Status TapeOperation::AddInputList(
 }
 absl::Status TapeOperation::SetAttrString(const char* attr_name,
                                           const char* data, size_t length) {
-  forward_op_.attrs.Set(attr_name, StringPiece(data, length));
+  forward_op_.attrs.Set(attr_name, absl::string_view(data, length));
   return parent_op_->SetAttrString(attr_name, data, length);
 }
 absl::Status TapeOperation::SetAttrInt(const char* attr_name, int64_t value) {
@@ -145,9 +145,9 @@ absl::Status TapeOperation::SetAttrStringList(const char* attr_name,
                                               const void* const* values,
                                               const size_t* lengths,
                                               int num_values) {
-  std::vector<StringPiece> v(num_values);
+  std::vector<absl::string_view> v(num_values);
   for (int i = 0; i < num_values; ++i) {
-    v[i] = StringPiece(static_cast<const char*>(values[i]), lengths[i]);
+    v[i] = absl::string_view(static_cast<const char*>(values[i]), lengths[i]);
   }
   forward_op_.attrs.Set(attr_name, v);
   return parent_op_->SetAttrStringList(attr_name, values, lengths, num_values);
