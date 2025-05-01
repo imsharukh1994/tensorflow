@@ -453,12 +453,8 @@ cc_library(
     hdrs = ["shape_inference_helpers.h"],
     visibility = [":friends"],
     deps = select({
-        "//tensorflow:android": [
-            "//tensorflow/core:portable_tensorflow_lib",
-        ],
-        "//conditions:default": [
-            "//tensorflow/core:graph",
-        ],
+        "//tensorflow:android": ["//tensorflow/core:portable_tensorflow_lib"],
+        "//conditions:default": ["//tensorflow/core:graph"],
     }),
 )
 
@@ -2005,3 +2001,13 @@ tf_cuda_cc_test(
         "@local_xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
     ],
 )
+
+tf_cc_test(
+    name = "new_test",
+    srcs = ["new_test.cc"],
+    deps = [
+        "//tensorflow/core:test",
+        "//tensorflow/core:framework",
+    ],
+)
+# TODO: Update this target to use the new API.
