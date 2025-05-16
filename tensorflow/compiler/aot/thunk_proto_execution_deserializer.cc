@@ -20,6 +20,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "absl/numeric/int128.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -28,9 +30,11 @@ limitations under the License.
 #include "xla/backends/cpu/runtime/convolution_lib.h"
 #include "xla/backends/cpu/runtime/dot_lib.h"
 #include "xla/backends/cpu/runtime/thunk.pb.h"
+#include "xla/service/cpu/executable.pb.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/util.h"
+#include "xla/xla_data.pb.h"
 
 namespace tensorflow {
 namespace tfcompile {
@@ -38,7 +42,7 @@ namespace tfcompile {
 namespace {
 
 std::string GetBufferAllocationString(
-    const xla::cpu::BufferAllocationSliceProto& slice) {
+    const xla::buffer_assignment::BufferAllocationSliceProto& slice) {
   return absl::StrCat("reinterpret_cast<std::byte*>(buffer_table()[",
                       slice.buffer_allocation_index(), "]) + ", slice.offset());
 }
@@ -595,8 +599,8 @@ ThunkProtoExecutionDeserializer::GetConditionalThunkRunImpl(
      })";
 
   auto get_branch_index =
-      [](const xla::cpu::BufferAllocationSliceProto& branch_index_buffer)
-      -> absl::StatusOr<std::string> {
+      [](const xla::buffer_assignment::BufferAllocationSliceProto&
+             branch_index_buffer) -> absl::StatusOr<std::string> {
     if (branch_index_buffer.size() == sizeof(bool)) {
       return absl::StrCat("*reinterpret_cast<bool*>(",
                           GetBufferAllocationString(branch_index_buffer),

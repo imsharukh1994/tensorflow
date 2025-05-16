@@ -5,6 +5,7 @@ load(
     "xla_cc_test",
     "xla_py_test_deps",
 )
+load("//xla/python:package_groups.bzl", "XLA_PYTHON_XLA_CLIENT_USERS", "XLA_PYTHON_XLA_EXTENSION_USERS")
 load("//xla/python:pywrap.bzl", "nanobind_pywrap_extension")
 load(
     "//xla/tsl:tsl.bzl",
@@ -43,8 +44,9 @@ exports_files(
 pytype_strict_library(
     name = "xla_client",
     srcs = ["xla_client.py"],
-    visibility = ["//visibility:public"],
+    visibility = internal_visibility(XLA_PYTHON_XLA_CLIENT_USERS),
     deps = if_google([
+        ":_hlo_pass",
         ":_ops",
         ":_profiler",
         ":_xla_builder",
@@ -57,7 +59,7 @@ pytype_strict_library(
 pytype_strict_library(
     name = "xla_extension",
     srcs = ["xla_extension.py"],
-    visibility = ["//visibility:public"],
+    visibility = internal_visibility(XLA_PYTHON_XLA_EXTENSION_USERS),
     deps = if_google(["//third_party/py/jax/jaxlib:_jax"]),
 )
 
@@ -98,6 +100,7 @@ cc_library(
     visibility = internal_visibility([":friends"]),
     deps = [
         ":nb_numpy",
+        ":safe_static_init",
         "//xla:literal",
         "//xla:shape_util",
         "//xla:status_macros",
@@ -134,6 +137,7 @@ cc_library(
         "//xla/tsl/platform:logging",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
         "@local_config_python//:python_headers",  # buildcleaner: keep
         "@local_tsl//tsl/platform:protobuf",
         "@local_tsl//tsl/profiler/protobuf:profile_proto_cc",
@@ -222,6 +226,23 @@ cc_library(
 )
 
 nanobind_pywrap_extension(
+    name = "_hlo_pass",
+    srcs = ["hlo_pass.cc"],
+    pytype_srcs = ["_hlo_pass.pyi"],
+    visibility = [":friends"],
+    deps = [
+        "//xla/hlo/ir:hlo_module_group",
+        "//xla/hlo/pass:hlo_pass",
+        "//xla/hlo/transforms/simplifiers:flatten_call_graph",
+        "//xla/hlo/transforms/simplifiers:hlo_dce",
+        "//xla/hlo/transforms/simplifiers:tuple_simplifier",
+        "//xla/pjrt:status_casters",
+        "//xla/service:call_inliner",
+        "@nanobind",
+    ],
+)
+
+nanobind_pywrap_extension(
     name = "_xla_builder",
     srcs = ["xla_builder.cc"],
     pytype_deps = [
@@ -304,6 +325,14 @@ cc_library(
         "@stablehlo//:base",
         "@stablehlo//:chlo_ops",
         "@stablehlo//:stablehlo_ops",
+    ],
+)
+
+cc_library(
+    name = "safe_static_init",
+    hdrs = ["safe_static_init.h"],
+    deps = [
+        "@com_google_absl//absl/synchronization",
     ],
 )
 

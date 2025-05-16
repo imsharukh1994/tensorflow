@@ -607,9 +607,10 @@ CodegenDecision IsTritonSupportedInstructionImpl(
       return CanTritonHandleReduce(*Cast<HloReduceInstruction>(&instr),
                                    gpu_version);
     }
+    case HloOpcode::kParameter:
+      return CodegenDecision::Allow();
     case HloOpcode::kBitcast:
     case HloOpcode::kBroadcast:
-    case HloOpcode::kParameter:
     case HloOpcode::kReshape:
     case HloOpcode::kSlice:
     case HloOpcode::kTranspose:
@@ -652,8 +653,6 @@ bool IsTritonUnsupportedOpcode(HloOpcode opcode) {
     case HloOpcode::kDynamicSlice:
     case HloOpcode::kDynamicUpdateSlice:
     case HloOpcode::kGather:
-    case HloOpcode::kGetTupleElement:
-    case HloOpcode::kMap:
     case HloOpcode::kPad:
     case HloOpcode::kRaggedDot:
     case HloOpcode::kRecv:
@@ -665,10 +664,6 @@ bool IsTritonUnsupportedOpcode(HloOpcode opcode) {
     case HloOpcode::kSendDone:
     case HloOpcode::kSetDimensionSize:
     case HloOpcode::kSort:
-    case HloOpcode::kStochasticConvert:
-    case HloOpcode::kTopK:
-    case HloOpcode::kTriangularSolve:
-    case HloOpcode::kTuple:
       return true;
     default:
       return false;

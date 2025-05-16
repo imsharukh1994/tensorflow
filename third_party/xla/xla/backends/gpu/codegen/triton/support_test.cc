@@ -90,6 +90,7 @@ bool DoesOpSupportType(HloOpcode opcode, PrimitiveType type) {
     case HloOpcode::kImag:
     case HloOpcode::kLogistic:
     case HloOpcode::kCholesky:
+    case HloOpcode::kTriangularSolve:
       return pu::IsFloatingPointType(type) || pu::IsComplexType(type);
     case HloOpcode::kCbrt:
     case HloOpcode::kErf:
@@ -126,6 +127,7 @@ bool DoesOpSupportType(HloOpcode opcode, PrimitiveType type) {
     case HloOpcode::kBatchNormInference:
     case HloOpcode::kBatchNormTraining:
     case HloOpcode::kBatchNormGrad:
+    case HloOpcode::kStochasticConvert:
       return pu::IsFloatingPointType(type);
     default:
       // Returning true by default ensures that newly added ops are not
@@ -1349,15 +1351,22 @@ using ParameterTest = TritonSupportTestWithTypeAndDeviceParam;
 
 TEST_P(ParameterTest, Parameter) {
   auto [data_type, cc] = GetParam();
-  const std::string kHloTestTemplate = R"(
+  std::string hlo_test_template =
+      R"(
+ENTRY triton_computation {
+  ROOT root = $0[35,131] parameter(0)
+})";
+  if (data_type == S4) {  // S4 is not a valid output, convert it to S8.
+    hlo_test_template = R"(
 ENTRY triton_computation {
   input = $0[35,131] parameter(0)
-  // TODO(b/363961478) remove the line below once parameters can be ROOT.
-  ROOT noop = $0[35,131] convert(input)
+  ROOT noop = s8[35,131] convert(input)
 })";
-  TF_ASSERT_OK_AND_ASSIGN(TestedInstruction ti, ParseTemplateAndGetInstruction(
-                                                    kHloTestTemplate, data_type,
-                                                    HloOpcode::kParameter));
+  }
+  TF_ASSERT_OK_AND_ASSIGN(
+      TestedInstruction ti,
+      ParseTemplateAndGetInstruction(hlo_test_template, data_type,
+                                     HloOpcode::kParameter));
   RunSupportTest(std::move(ti), /*output_tile_sizes=*/{16, 32}, cc);
 }
 
@@ -2524,6 +2533,50 @@ INSTANTIATE_TEST_SUITE_P(AfterAllSuite, AfterAllTest,
                          ::testing::ValuesIn(AllDevicesToTest()),
                          TritonSupportTestDeviceToString);
 
+using TupleTest = TritonSupportTestWithDeviceParam;
+
+TEST_P(TupleTest, Tuple) {
+  auto cc = GetParam();
+  const std::string kHloTestTemplate = R"(
+    ENTRY triton_computation {
+      p0 = f32[10] parameter(0)
+      p1 = s32[5] parameter(1)
+      ROOT tuple_op = (f32[10], s32[5]) tuple(p0, p1)
+    })";
+  TF_ASSERT_OK_AND_ASSIGN(TestedInstruction ti,
+                          ParseTemplateAndGetInstruction(
+                              kHloTestTemplate,
+                              PRIMITIVE_TYPE_INVALID,  // Type is irrelevant.
+                              HloOpcode::kTuple));
+  RunSupportTestMultipleOutputTiles(std::move(ti),
+                                    /*output_tile_sizes=*/{{1}, {1}}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(TupleSuite, TupleTest,
+                         ::testing::ValuesIn(AllDevicesToTest()),
+                         TritonSupportTestDeviceToString);
+
+using GetTupleElementTest = TritonSupportTestWithDeviceParam;
+
+TEST_P(GetTupleElementTest, GetTupleElement) {
+  auto cc = GetParam();
+  const std::string kHloTestTemplate = R"(
+    ENTRY triton_computation {
+      tuple_op = (f32[10], s32[5]) parameter(0)
+      ROOT gte = f32[10] get-tuple-element(tuple_op), index=0
+    })";
+  TF_ASSERT_OK_AND_ASSIGN(TestedInstruction ti,
+                          ParseTemplateAndGetInstruction(
+                              kHloTestTemplate,
+                              PRIMITIVE_TYPE_INVALID,  // Type is irrelevant.
+                              HloOpcode::kGetTupleElement));
+  RunSupportTest(std::move(ti), /*output_tile_sizes=*/{1}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(GetTupleElementSuite, GetTupleElementTest,
+                         ::testing::ValuesIn(AllDevicesToTest()),
+                         TritonSupportTestDeviceToString);
+
 using CustomCallTest = TritonSupportTestWithDeviceParam;
 
 TEST_P(CustomCallTest, CustomCall) {
@@ -2581,6 +2634,79 @@ INSTANTIATE_TEST_SUITE_P(
         ::testing::ValuesIn(AllOpSupportedTypes(HloOpcode::kCholesky)),
         ::testing::ValuesIn(AllDevicesToTest()), ::testing::Bool()),
     CholeskyTestName);
+
+class TriangularSolveParamTest
+    : public TritonSupportTest,
+      public ::testing::WithParamInterface<
+          std::tuple<PrimitiveType, se::GpuComputeCapability, bool /*lower*/,
+                     bool /*unit_diagonal*/,
+                     TriangularSolveOptions::Transpose /*transpose_a*/>> {
+ public:
+  static std::string ParamToString(
+      const ::testing::TestParamInfo<ParamType>& info) {
+    auto [data_type, cc, lower, unit_diagonal, transpose_a] = info.param;
+    return absl::StrCat(primitive_util::LowercasePrimitiveTypeName(data_type),
+                        "_", ComputeCapabilityToString(cc), "_lower", lower,
+                        "_unitdiag", unit_diagonal, "_",
+                        TriangularSolveOptions::Transpose_Name(transpose_a));
+  }
+};
+
+TEST_P(TriangularSolveParamTest, TriangularSolveLeftSideTrue) {
+  auto [data_type, cc, lower, unit_diagonal, transpose_a] = GetParam();
+
+  const std::string hlo_text = absl::Substitute(
+      R"(
+ENTRY triton_computation {
+  a = $0[2,4,4] parameter(0)
+  b = $0[2,4,2] parameter(1)
+  ROOT result = $0[2,4,2] triangular-solve(a, b),
+    left_side=true, lower=$1, unit_diagonal=$2, transpose_a=$3
+})",
+      primitive_util::LowercasePrimitiveTypeName(data_type),
+      lower ? "true" : "false", unit_diagonal ? "true" : "false",
+      TriangularSolveOptions::Transpose_Name(transpose_a));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      TestedInstruction ti,
+      ParseTemplateAndGetInstruction(hlo_text, data_type,
+                                     HloOpcode::kTriangularSolve));
+  RunSupportTest(std::move(ti), {1, 2, 1}, cc);
+}
+
+TEST_P(TriangularSolveParamTest, TriangularSolveLeftSideFalse) {
+  auto [data_type, cc, lower, unit_diagonal, transpose_a] = GetParam();
+
+  const std::string hlo_text = absl::Substitute(
+      R"(
+ENTRY triton_computation {
+  a = $0[2,4,4] parameter(0)
+  b = $0[2,2,4] parameter(1)
+  ROOT result = $0[2,2,4] triangular-solve(a, b),
+    left_side=false, lower=$1, unit_diagonal=$2, transpose_a=$3
+})",
+      primitive_util::LowercasePrimitiveTypeName(data_type),
+      lower ? "true" : "false", unit_diagonal ? "true" : "false",
+      TriangularSolveOptions::Transpose_Name(transpose_a));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      TestedInstruction ti,
+      ParseTemplateAndGetInstruction(hlo_text, data_type,
+                                     HloOpcode::kTriangularSolve));
+  RunSupportTest(std::move(ti), {1, 1, 2}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TriangularSolveSuite, TriangularSolveParamTest,
+    ::testing::Combine(
+        ::testing::ValuesIn(AllOpSupportedTypes(HloOpcode::kTriangularSolve)),
+        ::testing::ValuesIn(AllDevicesToTest()),
+        ::testing::Bool(),  // lower
+        ::testing::Bool(),  // unit_diagonal
+        ::testing::ValuesIn({TriangularSolveOptions::NO_TRANSPOSE,
+                             TriangularSolveOptions::TRANSPOSE,
+                             TriangularSolveOptions::ADJOINT})),
+    TriangularSolveParamTest::ParamToString);
 
 class FftTest : public TritonSupportTest,
                 public ::testing::WithParamInterface<
@@ -2745,11 +2871,117 @@ TEST_P(OutfeedTest, Outfeed) {
   RunSupportTest(std::move(ti), /*output_tile_sizes=*/{}, cc);
 }
 
+using MapTest = TritonSupportTestWithTypeAndOpcodeAndDeviceParam;
+
+TEST_P(MapTest, Map) {
+  auto [data_type, opcode, cc] = GetParam();
+
+  // Note: the test is only relevant for datatypes supported by kAdd op.
+  const std::string kHloTestTemplate = R"(
+map_computation {
+  p = $0[] parameter(0)
+  ROOT add = $0[] add(p, p)
+}
+
+ENTRY triton_computation {
+  parameter = $0[10, 20] parameter(0)
+  ROOT map_op = $0[10, 20] map(parameter), dimensions={0, 1}, to_apply=map_computation
+})";
+  TF_ASSERT_OK_AND_ASSIGN(
+      TestedInstruction ti,
+      ParseTemplateAndGetInstruction(kHloTestTemplate, data_type, opcode));
+  RunSupportTest(std::move(ti), /*output_tile_sizes=*/{4, 8}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(MapSuite, MapTest,
+                         AllTestCombinationsForOpcodes({HloOpcode::kMap}),
+                         TritonSupportTestTypeAndOpcodeAndDeviceToString);
+
 INSTANTIATE_TEST_SUITE_P(
     OutfeedSuite, OutfeedTest,
     ::testing::Combine(::testing::ValuesIn(AllXlaDataTypes()),
                        ::testing::ValuesIn(AllDevicesToTest())),
     TritonSupportTestTypeAndDeviceToString);
+
+class StochasticConvertTest
+    : public TritonSupportTest,
+      public ::testing::WithParamInterface<
+          std::tuple<PrimitiveType, PrimitiveType, se::GpuComputeCapability>> {
+};
+
+TEST_P(StochasticConvertTest, StochasticConvert) {
+  auto [operand_type, new_element_type, cc] = GetParam();
+
+  PrimitiveType random_type = primitive_util::UnsignedIntegralTypeForBitWidth(
+      primitive_util::BitWidth(operand_type));
+
+  ASSERT_NE(random_type, PRIMITIVE_TYPE_INVALID)
+      << "Could not determine a valid random_type for operand_type: "
+      << PrimitiveType_Name(operand_type);
+
+  const std::string hlo_text = absl::Substitute(
+      R"(
+      ENTRY triton_computation {
+        operand = $0[33,68] parameter(0)
+        random = $1[33,68] parameter(1)
+        ROOT result = $2[33,68] stochastic-convert(operand, random)
+      })",
+      primitive_util::LowercasePrimitiveTypeName(operand_type),
+      primitive_util::LowercasePrimitiveTypeName(random_type),
+      primitive_util::LowercasePrimitiveTypeName(new_element_type));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      TestedInstruction ti,
+      ParseTemplateAndGetInstruction(
+          hlo_text, PRIMITIVE_TYPE_INVALID,  // Type is irrelevant.
+          HloOpcode::kStochasticConvert));
+
+  RunSupportTest(std::move(ti), /*output_tile_sizes=*/{1, 32}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    StochasticConvertTestSuite, StochasticConvertTest,
+    ::testing::Combine(
+        ::testing::ValuesIn(AllOpSupportedTypes(
+            HloOpcode::kStochasticConvert)),     // Operand type.
+        ::testing::ValuesIn(AllXlaDataTypes()),  // New element type.
+        ::testing::ValuesIn(AllDevicesToTest())),
+    TritonSupportTestTwoTypesAndDeviceToString);
+
+using TopKTest = TritonSupportTestWithTypeAndDeviceAndBoolParam;
+
+std::string ParamToStringTopK(
+    const ::testing::TestParamInfo<TopKTest::ParamType>& info) {
+  auto [data_type, cc, largest] = info.param;
+  return absl::StrCat(PrimitiveType_Name(data_type), "_",
+                      ComputeCapabilityToString(cc), "_",
+                      largest ? "largest" : "smallest");
+}
+
+TEST_P(TopKTest, TopK) {
+  auto [data_type, cc, largest] = GetParam();
+  const std::string kHloTestTemplate = absl::Substitute(
+      R"(
+ENTRY triton_computation {
+  operand = $$0[11,33,77] parameter(0)
+  ROOT topk_op = ($$0[11,33,10], s32[11,33,10]) topk(operand), k=10, largest=$0
+})",
+      largest);
+  TF_ASSERT_OK_AND_ASSIGN(TestedInstruction ti,
+                          ParseTemplateAndGetInstruction(
+                              kHloTestTemplate, data_type, HloOpcode::kTopK));
+  RunSupportTestMultipleOutputTiles(
+      std::move(ti),
+      /*output_tile_sizes=*/{{2, 2, 1}, {2, 2, 1}}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TopKSuite, TopKTest,
+    ::testing::Combine(
+        ::testing::ValuesIn(AllOpSupportedTypes(HloOpcode::kTopK)),
+        ::testing::ValuesIn(AllDevicesToTest()),
+        ::testing::Bool()),  // largest?
+    ParamToStringTopK);
 
 constexpr std::array kUnsupportedOps = {
     // clang-format off
@@ -2759,8 +2991,6 @@ constexpr std::array kUnsupportedOps = {
     HloOpcode::kDynamicSlice,
     HloOpcode::kDynamicUpdateSlice,
     HloOpcode::kGather,
-    HloOpcode::kGetTupleElement,
-    HloOpcode::kMap,
     HloOpcode::kPad,
     HloOpcode::kRaggedDot,
     HloOpcode::kRecv,
@@ -2772,10 +3002,6 @@ constexpr std::array kUnsupportedOps = {
     HloOpcode::kSendDone,
     HloOpcode::kSetDimensionSize,
     HloOpcode::kSort,
-    HloOpcode::kStochasticConvert,
-    HloOpcode::kTopK,
-    HloOpcode::kTriangularSolve,
-    HloOpcode::kTuple,
     // go/keep-sorted end
     // clang-format on
 };
@@ -2817,13 +3043,19 @@ absl::flat_hash_set<HloOpcode> AllTestedOpcodes() {
   ret.emplace(HloOpcode::kDot);
   ret.emplace(HloOpcode::kFft);
   ret.emplace(HloOpcode::kGetDimensionSize);
+  ret.emplace(HloOpcode::kGetTupleElement);
+  ret.emplace(HloOpcode::kMap);
   ret.emplace(HloOpcode::kReverse);
   ret.emplace(HloOpcode::kRngBitGenerator);
   ret.emplace(HloOpcode::kRngGetAndUpdateState);
+  ret.emplace(HloOpcode::kTuple);
   ret.emplace(HloOpcode::kWhile);
   ret.emplace(HloOpcode::kFusion);
   ret.emplace(HloOpcode::kInfeed);
   ret.emplace(HloOpcode::kOutfeed);
+  ret.emplace(HloOpcode::kStochasticConvert);
+  ret.emplace(HloOpcode::kTopK);
+  ret.emplace(HloOpcode::kTriangularSolve);
   ret.insert(kUnsupportedOps.begin(), kUnsupportedOps.end());
 
   return ret;

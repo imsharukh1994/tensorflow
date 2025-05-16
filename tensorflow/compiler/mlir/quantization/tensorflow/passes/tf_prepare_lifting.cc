@@ -46,7 +46,7 @@ limitations under the License.
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
 #include "tensorflow/compiler/mlir/quantization/common/ir/QuantOps.h"
 #include "tensorflow/compiler/mlir/quantization/common/tf_attrs_and_constraints.h"
-#include "tensorflow/compiler/mlir/quantization/tensorflow/cc/constant_fold.h"
+#include "tensorflow/compiler/mlir/quantization/tensorflow/cc/tf_constant_fold.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/passes/remove_identity_op_pattern.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/passes/tf_passes.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/quantization_options.pb.h"
@@ -55,23 +55,23 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tensorflow/transforms/einsum.h"
 
 namespace mlir {
-namespace quant {
+namespace tf_quant {
 namespace {
 
 using ::tensorflow::quantization::OpSet;
 using tf_quant::CloneOpWithReplacedOperands;
 using tf_quant::HasStaticShape;
 
-class TFPrepareLiftingPass
-    : public PassWrapper<TFPrepareLiftingPass, OperationPass<func::FuncOp>> {
+class PrepareLiftingPass
+    : public PassWrapper<PrepareLiftingPass, OperationPass<func::FuncOp>> {
  public:
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TFPrepareLiftingPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PrepareLiftingPass)
 
-  TFPrepareLiftingPass() = default;
+  PrepareLiftingPass() = default;
 
-  explicit TFPrepareLiftingPass(OpSet op_set) { op_set_ = op_set; }
+  explicit PrepareLiftingPass(OpSet op_set) { op_set_ = op_set; }
 
-  TFPrepareLiftingPass(const TFPrepareLiftingPass& other) {
+  PrepareLiftingPass(const PrepareLiftingPass& other) {
     op_set_ = other.op_set_;
   }
 
@@ -227,7 +227,8 @@ bool CanBeSymmetricallyQuantized(Value weight) {
   if (auto uniform_type = llvm::dyn_cast_or_null<UniformQuantizedType>(qtype)) {
     return uniform_type.getZeroPoint() == 0;
   } else if (auto per_axis_type =
-                 llvm::dyn_cast_or_null<UniformQuantizedPerAxisType>(qtype)) {
+                 llvm::dyn_cast_or_null<quant::UniformQuantizedPerAxisType>(
+                     qtype)) {
     return absl::c_all_of(per_axis_type.getZeroPoints(),
                           [](int64_t x) { return x == 0; });
   }
@@ -295,18 +296,18 @@ Value MultiplyFakeQuantValue(OpBuilder& builder, Location loc, Value value,
       int32_t quantized_dim = new_value_type.getRank() - 1;
       auto new_zero_points =
           SmallVector<int64_t>(new_scales.size(), uniform_type.getZeroPoint());
-      new_qtype = UniformQuantizedPerAxisType::get(
+      new_qtype = quant::UniformQuantizedPerAxisType::get(
           uniform_type.getFlags(), uniform_type.getStorageType(),
           uniform_type.getExpressedType(), new_scales, new_zero_points,
           quantized_dim, uniform_type.getStorageTypeMin(),
           uniform_type.getStorageTypeMax());
     }
   } else if (auto per_axis_type =
-                 llvm::dyn_cast_or_null<UniformQuantizedPerAxisType>(
+                 llvm::dyn_cast_or_null<quant::UniformQuantizedPerAxisType>(
                      element_type)) {
     auto new_scales =
         MultiplyTwoArrays(multiplier_array, per_axis_type.getScales());
-    new_qtype = UniformQuantizedPerAxisType::get(
+    new_qtype = quant::UniformQuantizedPerAxisType::get(
         per_axis_type.getFlags(), per_axis_type.getStorageType(),
         per_axis_type.getExpressedType(), new_scales,
         per_axis_type.getZeroPoints(), per_axis_type.getQuantizedDimension(),
@@ -320,9 +321,9 @@ Value MultiplyFakeQuantValue(OpBuilder& builder, Location loc, Value value,
   return dequantize.getResult();
 }
 
-#include "tensorflow/compiler/mlir/quantization/tensorflow/passes/prepare_lifting.inc"
+#include "tensorflow/compiler/mlir/quantization/tensorflow/passes/tf_prepare_lifting.inc"
 
-void TFPrepareLiftingPass::runOnOperation() {
+void PrepareLiftingPass::runOnOperation() {
   MLIRContext* ctx = &getContext();
   auto func = getOperation();
 
@@ -330,7 +331,7 @@ void TFPrepareLiftingPass::runOnOperation() {
   // with a constant operand to a preceding affine operation.
   RewritePatternSet patterns(ctx);
   populateWithGenerated(patterns);
-  patterns.add<RemoveIdentity, ConstantFoldQuantizableOperands>(ctx);
+  patterns.add<quant::RemoveIdentity, ConstantFoldQuantizableOperands>(ctx);
   if (op_set_ != OpSet::XLA) {
     // Convert Einsum into BatchMatMul for non-XLA opsets.
     // For the uniform opset, it is requested to maintain the BatchMatmul logic.
@@ -347,12 +348,12 @@ void TFPrepareLiftingPass::runOnOperation() {
 
 }  // namespace
 
-std::unique_ptr<OperationPass<func::FuncOp>> CreateTFPrepareLiftingPass(
+std::unique_ptr<OperationPass<func::FuncOp>> CreatePrepareLiftingPass(
     const OpSet target_opset) {
-  return std::make_unique<TFPrepareLiftingPass>(target_opset);
+  return std::make_unique<PrepareLiftingPass>(target_opset);
 }
 
-static PassRegistration<TFPrepareLiftingPass> pass;
+static PassRegistration<PrepareLiftingPass> pass;
 
-}  // namespace quant
+}  // namespace tf_quant
 }  // namespace mlir
